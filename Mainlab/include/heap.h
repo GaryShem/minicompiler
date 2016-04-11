@@ -1,5 +1,5 @@
-#ifndef HEAP_H
-#define HEAP_H
+#ifndef LAB_HEAP_H
+#define LAB_HEAP_H
 
 #define SEGMENTSIZE 65539
 #define SEGMENTCOUNT 1024

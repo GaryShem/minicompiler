@@ -3,6 +3,8 @@
 
 #include "stdafx.h"
 #include "include/heap.h"
+#include "include/list.h"
+#include "include/list_adv.h"
 #include <iostream>
 #include <string>
 
