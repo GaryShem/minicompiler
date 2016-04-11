@@ -9,20 +9,20 @@ void* Heap::get_mem(int size)
 	if (size%sizeof(int))
 		memory_to_allocate++;
 	memory_to_allocate *= sizeof(int); //преобразовали в байты
-	Segment* activeSegment = current;
-	while (activeSegment)
+	Segment* active_segment = current;
+	while (active_segment)
 	{
-		Segment_def* serviceRecord = &(activeSegment->descriptor[activeSegment->descriptor_count]);
+		Segment_def* serviceRecord = &(active_segment->descriptor[active_segment->descriptor_count]);
+		size_t segment_start = (size_t)active_segment->data;
 
-
-		if (activeSegment->descriptor_count >= SEGMENTCOUNT)
+		if (active_segment->descriptor_count >= SEGMENTCOUNT)
 		{
-			activeSegment = activeSegment->prev;
+			active_segment = active_segment->prev;
 			continue;
 		}
 		// на данном этапе мы знаем, что у нас есть место как минимум под один новый дескриптор
 		//if (activeSegment->descriptor[activeSegment->descriptor_count].size >= region_count)
-		if (serviceRecord->size >= memory_to_allocate && activeSegment->descriptor_count < SEGMENTCOUNT)
+		if (serviceRecord->size >= memory_to_allocate && active_segment->descriptor_count < SEGMENTCOUNT)
 		{ // если влезает в конец
 			serviceRecord->size -= memory_to_allocate;
 			serviceRecord->offset += memory_to_allocate;
@@ -34,36 +34,51 @@ void* Heap::get_mem(int size)
 			serviceRecord->size = memory_to_allocate;
 			serviceRecord->used = true;
 
-			activeSegment->descriptor_count++;
+			active_segment->descriptor_count++;
 
-			return (void*)((size_t)activeSegment->data + serviceRecord->offset);
+			return (void*)(segment_start + serviceRecord->offset);
 		}
 		else // таки если не влезло в конец
 		{
-			for (int i = 0; i < activeSegment->descriptor_count; i++)
+			// проходим по массиву дескрипторов и ищем свободну область, подходящую по размеру
+			for (int i = 0; i < active_segment->descriptor_count; i++)
 			{
 				// сначала проверим занятость куска
-				if (activeSegment->descriptor[i].used)
+				if (active_segment->descriptor[i].used)
 				{
 					continue;
 				}
 				// теперь мы точно знаем, что текущий кусок не используется
 				// теперь проверим размер куска
-				if (activeSegment->descriptor[i].size < memory_to_allocate)
+				if (active_segment->descriptor[i].size < memory_to_allocate)
 				{
 					continue;
 				}
 				// теперь мы знаем, что у нас есть свободный кусок достаточного размера
 				// хотим в него воткнуться
-				if (activeSegment->descriptor_count == SEGMENTCOUNT || activeSegment->descriptor[i].size == memory_to_allocate) 
+				if (active_segment->descriptor_count == SEGMENTCOUNT || active_segment->descriptor[i].size == memory_to_allocate) 
 				{ // если нет места под новые дескрипторы в массиве, то отдаём весь кусок вне зависимости от размера
-					activeSegment->descriptor[i].used = true;
+					active_segment->descriptor[i].used = true;
 					// возвращаем абсолютный адрес этого куска (адрес сегмента + смещение относительно начала сегмента)
-					return (void*)((size_t)activeSegment->data + activeSegment->descriptor[i].offset);
+					return (void*)(segment_start + active_segment->descriptor[i].offset);
 				}
 				else
 				{
 					// если место есть, то делим наш дескриптор на две части
+					int move_count = active_segment->descriptor_count - i + 1;
+					size_t move_size = move_count * sizeof(Segment_def);
+					memmove(&(active_segment->descriptor[i+1]), &(active_segment->descriptor[i]), move_size);
+
+					// настраиваем дескриптор, отвечающий занятому куску
+					active_segment->descriptor[i].size = memory_to_allocate;
+					active_segment->descriptor[i].used = true;
+
+					// настраиваем дескриптор, отвечающий оставшемуся свободному куску
+					active_segment->descriptor[i].size -= memory_to_allocate;
+					active_segment->descriptor[i].offset += memory_to_allocate;
+
+					// возвращаем адрес нового занятого куска
+					return (void*)(segment_start + active_segment->descriptor[i].offset);
 				}
 				// TODO:
 			}
