@@ -74,8 +74,8 @@ void* Heap::get_mem(int size)
 					active_segment->descriptor[i].used = true;
 
 					// настраиваем дескриптор, отвечающий оставшемуся свободному куску
-					active_segment->descriptor[i].size -= memory_to_allocate;
-					active_segment->descriptor[i].offset += memory_to_allocate;
+					active_segment->descriptor[i+1].size -= memory_to_allocate;
+					active_segment->descriptor[i+1].offset += memory_to_allocate;
 
 					// возвращаем адрес нового занятого куска
 					return (void*)(segment_start + active_segment->descriptor[i].offset);
