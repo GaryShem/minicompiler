@@ -10,33 +10,30 @@ void* Heap::get_mem(int size)
 		memory_to_allocate++;
 	memory_to_allocate *= sizeof(int); //преобразовали в байты
 	Segment* active_segment = current;
-	while (active_segment)
+	Segment_def* service_record;
+	size_t segment_start;
+	for (active_segment = current; active_segment; active_segment = active_segment->prev)
 	{
-		Segment_def* serviceRecord = &(active_segment->descriptor[active_segment->descriptor_count]);
-		size_t segment_start = (size_t)active_segment->data;
+		service_record = &(active_segment->descriptor[active_segment->descriptor_count]);
+		segment_start = (size_t)active_segment->data;
 
-		if (active_segment->descriptor_count >= SEGMENTCOUNT)
-		{
-			active_segment = active_segment->prev;
-			continue;
-		}
 		// на данном этапе мы знаем, что у нас есть место как минимум под один новый дескриптор
 		//if (activeSegment->descriptor[activeSegment->descriptor_count].size >= region_count)
-		if (serviceRecord->size >= memory_to_allocate && active_segment->descriptor_count < SEGMENTCOUNT)
+		if (service_record->size >= memory_to_allocate && active_segment->descriptor_count < SEGMENTCOUNT)
 		{ // если влезает в конец
-			serviceRecord->size -= memory_to_allocate;
-			serviceRecord->offset += memory_to_allocate;
+			service_record->size -= memory_to_allocate;
+			service_record->offset += memory_to_allocate;
 
-			memmove(serviceRecord + sizeof(Segment_def), // сместить на один собственный размер
-				serviceRecord,
+			memmove(service_record + sizeof(Segment_def), // сместить на один собственный размер
+				service_record,
 				sizeof(Segment_def));
 
-			serviceRecord->size = memory_to_allocate;
-			serviceRecord->used = true;
+			service_record->size = memory_to_allocate;
+			service_record->used = true;
 
 			active_segment->descriptor_count++;
 
-			return (void*)(segment_start + serviceRecord->offset);
+			return (void*)(segment_start + service_record->offset);
 		}
 		else // таки если не влезло в конец
 		{
@@ -58,6 +55,7 @@ void* Heap::get_mem(int size)
 				// хотим в него воткнуться
 				if (active_segment->descriptor_count == SEGMENTCOUNT || active_segment->descriptor[i].size == memory_to_allocate) 
 				{ // если нет места под новые дескрипторы в массиве, то отдаём весь кусок вне зависимости от размера
+					// если размер куска равен запрашиваемому, то ясное дело тоже отдаём весь
 					active_segment->descriptor[i].used = true;
 					// возвращаем абсолютный адрес этого куска (адрес сегмента + смещение относительно начала сегмента)
 					return (void*)(segment_start + active_segment->descriptor[i].offset);
@@ -77,19 +75,115 @@ void* Heap::get_mem(int size)
 					active_segment->descriptor[i+1].size -= memory_to_allocate;
 					active_segment->descriptor[i+1].offset += memory_to_allocate;
 
+					// увеличиваем количество задействованных дескрипторов
+					active_segment->descriptor_count++;
+
 					// возвращаем адрес нового занятого куска
 					return (void*)(segment_start + active_segment->descriptor[i].offset);
 				}
-				// TODO:
 			}
 		}
 	}
 	// создание нового сегмента, добавление в него
+	make_segment();
+
+	// по-хорошему, это стоит вынести в функцию, но ограничения на изменения header-a - СПРОСИТЬ
+
+	// переприсваиваем указатели
+	service_record = &current->descriptor[0];
+	active_segment = current;
+	segment_start = (size_t)active_segment->data;
+
+	// этот кусок можно вынести в функцию
+	service_record->size -= memory_to_allocate;
+	service_record->offset += memory_to_allocate;
+
+	memmove(service_record + sizeof(Segment_def), // сместить на один собственный размер
+		service_record,
+		sizeof(Segment_def));
+
+	// так как service_record всё ещё указывает на нулевую запись, мы просто меняем то, что осталось по этому адресу
+	service_record->size = memory_to_allocate;
+	service_record->used = true;
+
+	active_segment->descriptor_count++;
+
+	return (void*)(segment_start + service_record->offset);
 }
 
-void Heap::free_mem(void*)
+void Heap::free_mem(void* address_void)
 {
-	throw 1;
+	// счётчик сдвига таблицы дескрипторов
+	int shift_count = 0;
+	size_t address = (size_t)address_void;
+
+	Segment* active_segment = current;
+	size_t segment_start;
+
+	// сначала ищем нужный сегмент
+	while (true)
+	{
+		segment_start = (size_t)active_segment->data;
+		if (address > segment_start && address < segment_start + SEGMENTSIZE)
+			break;
+		active_segment = active_segment->prev;
+	}
+	
+	// нашли нужный сегмент, теперь работаем внутри него с дескрипторами
+	// сначала для удобства вынесем смещение относительно начала этого сегмента в отдельную переменную
+	size_t offset = address - segment_start;
+
+	int i = 0;
+	while (offset < active_segment->descriptor[i].offset)
+	{
+		i++;
+	}
+
+	// если никто ничего не сломал, то сейчас offset и active_segment->descriptor[i].offset равны между собой
+	// если же надо учитывать, что пользователь - дебил, то сюда пойдёт куча проверок
+	active_segment->descriptor[i + 1].used = false;
+	bool is_next_free = false;
+	if (active_segment->descriptor[i+1].used == false)
+	{
+		is_next_free = true;
+		shift_count++;
+		active_segment->descriptor[i].size += active_segment->descriptor[i + 1].size;
+	}
+	if (i > 0 && active_segment->descriptor[i - 1].used == false)
+	{
+		shift_count++;
+		active_segment->descriptor[i - 1].size += active_segment->descriptor[i].size;
+	}
+
+	// теперь в самом верхнем из 1/2/3 свободных дескрипторов содержится общий размер свободного куска
+	// осталось сместить нижнюю часть массива дескрипторов на количество записей, содержащееся в shift_count - счётчике сдвига
+
+	// если shift_count == 0, то ничего не делаем и возвращаемся из функции
+	if (shift_count == 0)
+		return;
+	
+	// теперь мы знаем, что сдвиг точно будет
+
+	int move_count;
+	size_t move_size;
+	if (is_next_free)
+	{ // если следующий дескриптор свободен, то сдвиг будет начиная с индекса i+2
+		move_count = active_segment->descriptor_count - i - 1;
+		move_size = move_count * sizeof(Segment_def);
+		memmove(&active_segment->descriptor[i + 2 - shift_count],
+			&active_segment->descriptor[i + 2],
+			move_size);
+	}
+	else // если же следующий дескриптор занят, то сдвиг будет начиная с индекса i+1
+	{ // соответственно, сдвигаемых элементов будет на 1 больше, чем в предыдущем случае
+		// в этом блоке shift_count будет равен 1
+		move_count = active_segment->descriptor_count - i;
+		move_size = move_count * sizeof(Segment_def);
+		memmove(&active_segment->descriptor[i + 1 - shift_count],
+			&active_segment->descriptor[i + 1],
+			move_size);
+	}
+	active_segment->descriptor_count -= shift_count;
 }
 
 int Heap::make_segment()
@@ -116,5 +210,4 @@ void Heap::delete_segments()
 		free(current);
 		current = next;
 	}
-	throw 1;
 }
