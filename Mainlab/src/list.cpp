@@ -41,6 +41,11 @@ void List::add(void* data)
 
 void List::take_first(void* store)
 {
+	// если элементов нет, то выбросим эксепшн
+	// так себя ведут контейнеры в C#
+	if (count() < 1)
+		throw "No elements in container";
+
 	// сначала копируем элемент в store
 	memcpy(store, (void*)((size_t)first->data + first_index*element_size), element_size);
 	// увеличиваем индекс первого элемента
@@ -61,7 +66,6 @@ void List::take_first(void* store)
 
 void List::take_last(void* store)
 {
-
 }
 
 void List::take(int pos, void* store)
