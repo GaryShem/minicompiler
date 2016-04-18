@@ -15,26 +15,58 @@ List::List(int _element_size, int _element_count)
 
 List::~List()
 {
-
+	Segment* current;
+	Segment* next;
+	current = first;
+	if (first == 0)
+		return;
+	while (current)
+	{
+		next = current->next;
+		delete_segment(current);
+		current = next;
+	}
 }
 
 void* List::get(int pos)
 {
-	return nullptr;
+	void* ourEl;
+	if (count() < pos || pos < 0)
+	{
+		_error = true;
+		return 0;
+	}
+
+
+	if (pos + first_index < element_count) // если в первом сегменте
+		ourEl = (void*)((size_t)(first->data) + (first_index + pos)*element_size);
+	else
+	{ // если не в первом сегменте 
+		struct Segment* ourSegm = first->next;
+		pos = pos - (element_count - first_index);
+		while (pos >= element_count)
+		{
+			ourSegm = ourSegm->next;
+			pos -= element_count;
+		}
+		ourEl = (void*)((size_t)(ourSegm->data) + pos*element_size);
+	}
+	return ourEl;
 }
 
 void List::add(void* data)
 {
+	_error = false;
 	if (first == 0 ||
 		(last_index % element_count == 0 && last->next == 0))
-	{ // если сегментов нет, или новый 
+	{ // если сегментов нет, или новый элемент не помещается в последний сегмент
 		new_segment();
-		memcpy(last->data, data, element_size);
+		memmove(last->data, data, element_size);
 	}
 	else
 	{ // если новый элемент помещается в существующий сегмент last
 		int segment_index = last_index % element_count;
-		memcpy((void*)((size_t)last->data + segment_index*element_size), data, element_size);
+		memmove((void*)((size_t)last->data + segment_index*element_size), data, element_size);
 	}
 	last_index++;
 }
@@ -44,8 +76,11 @@ void List::take_first(void* store)
 	// если элементов нет, то выбросим эксепшн
 	// так себя ведут контейнеры в C#
 	if (count() < 1)
-		throw "No elements in container";
-
+	{
+		_error = true;
+		return;
+	}
+	_error = false;
 	// сначала копируем элемент в store
 	memcpy(store, (void*)((size_t)first->data + first_index*element_size), element_size);
 	// увеличиваем индекс первого элемента
@@ -66,25 +101,112 @@ void List::take_first(void* store)
 
 void List::take_last(void* store)
 {
+	// если элементов нет, то дадим ошибку
+	if (count() < 1)
+	{
+		_error = true;
+		return;
+	}
+	_error = false;
+	// сначала выясним индекс элемента только внутри последнего сегмента
+	int segment_index = (last_index % element_count) - 1;
+	// копируем элемент с этим индексом в store
+	memcpy(store, (void*)((size_t)last->data + segment_index*element_size), element_size);
+	// уменьшаем индекс последнего элемента
+	last_index--;
+
+	if (last_index % element_count == 0)
+	{ // если индекс за последним элементом стал в начале сегмента
+	  // то этот сегмент пуст и его надо удалить
+		Segment* new_last = last->prev;
+		// удаляем старый последний сегмент
+		delete_segment(last);
+		// настраиваем ссылку последнего сегмента на новый последний
+		last = new_last;
+	}
 }
 
 void List::take(int pos, void* store)
 {
-	
+	// сначала копируем нужный элемент в store
+	// адрес элемента получаем с помощью this->get()
+	memcpy(store, get(pos), element_size);
+
+	// так как мы уговорились о том, что take будет медленным, не будем морочиться над оптимизацией
+	// смещаем по одному элементу через цикл с помощью memcpy
+	// это позволяет не морочить себе мозги заполненностью сегментов
+	for (int i = pos + 1; i < last_index; i++)
+	{
+		memcpy(get(i-1), get(i), element_size);
+	}
+
+	last_index--;
+
+	// опять же - если последний сегмент оказался пуст, то удаляем его
+
+	if (last_index % element_count == 0)
+	{ // если индекс за последним элементом стал в начале сегмента
+		// то этот сегмент пуст и его надо удалить
+		Segment* new_last = last->prev;
+		// удаляем старый последний сегмент
+		delete_segment(last);
+		// настраиваем ссылку последнего сегмента на новый последний
+		last = new_last;
+	}
 }
 
-void List::sort(bool dir, int method)
-{
+void List::sort(bool dir, int (*method)(const void*, const void*))
+{ // считаем, что dir == true при возрастающем порядке сортировки
+	if (method == 0)
+		return;
+	int count = this->count();
+	void* buffer = heap.get_mem(element_size); // буффер под элемент для перестановок
+	for (int i = 0; i < count - 1; i++)
+	{
+		void* starting = get(i);
+		void* max = starting;
+		for (int j = i+1; j < count; j++)
+		{
+			// method должен быть функцией сравнения, принимающей указатели на два элемента
+			// возвращает 1 если первый элемент больше второго, 0 если они равны, -1 если первый меньше второго
+			void* current = get(j);
+			int n = *((int*)current);
+			int comparison_result = method(max, current);
+			if (dir)
+			{
+				// так как dir == true для возрастающего порядка, для убывания достаточно
+				// умножать результат на -1 - это будет равносильно перемене мест параметров в вызове method
+				comparison_result *= -1;
+			}
+			// если максимальный элемент меньше текущего
+			// (если минимальный элемент больше текущего)
+			// --- В ЗАВИСИМОСТИ ОТ dir ---
+			// то переприсваиваем указатель максимального (минимального) элемента
+			if (comparison_result < 0)
+			{
+				max = current;
+			}
+		}
+		// теперь мы нашли номер максимального (или минимального) элемента
+		// если этот элемент - не "текущий", т.е. не i-ый, то меняем их местами
+		if (starting != max)
+		{
+			memcpy(buffer, starting, element_size);
+			memcpy(starting, max, element_size);
+			memcpy(max, buffer, element_size);
+		}
+	}
 }
 
 int List::count()
 {
+	_error = false;
 	return last_index - first_index;
 }
 
 void List::new_segment()
 {
-	// выделяем память под саму структуру сегмента (т.е. под три указателя)
+	// выделяем память под саму структуру сегмента (т.е. под три указателя: data, next, prev)
 	Segment* new_segment = (Segment*)heap.get_mem(sizeof(Segment));
 	// потом выделяем память под LISTSIZE элементов и присваиваем указатель на эту область в data
 	new_segment->data = heap.get_mem(element_count*element_size);
@@ -98,6 +220,7 @@ void List::new_segment()
 	{ // если не первый, то он новый последний
 		new_segment->prev = last;
 		last->next = new_segment;
+		new_segment->next = 0;
 		last = new_segment;
 	}
 }
@@ -110,22 +233,27 @@ void List::delete_segment(Segment* seg)
 
 	// убираем данный сегмент из цепочки (списка)
 	if (seg->prev == 0)
-	{ // если данный сегмент - первый
+	{ 
+		// если данный сегмент - первый, то просто смещаем указатель первого сегмента
 		first = seg->next;
 	}
 	else
 	{
+		// иначе переносим ссылку next предыдущего сегмента на следующим за данным
 		seg->prev->next = seg->next;
 	}
 
 	if (seg->next == 0)
-	{ // если данный сегмент - последний, то переприсваиваем последний сегмент
+	{ 
+		// если данный сегмент - последний, то переприсваиваем последний сегмент
 		last = seg->prev;
 	}
 	else
 	{
+		// иначе переносим ссылку prev следующего сегмента на предыдущий перед данным
 		seg->next->prev = seg->prev;
 	}
+	// и освобождаем память - сначала данные сегмента, потом саму структуру с указателями
 	heap.free_mem(seg->data);
 	heap.free_mem(seg);
 }

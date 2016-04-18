@@ -23,13 +23,18 @@ void* Heap::get_mem(int size)
 		{ // если влезает в конец
 			service_record->size -= memory_to_allocate;
 			service_record->offset += memory_to_allocate;
+			Segment_def* new_service_record = service_record + 1;
 
-			memmove(service_record + sizeof(Segment_def), // сместить на один собственный размер
+			memmove(service_record + 1, // сместить на один собственный размер (+1 ¬Ќ≈«јѕЌќ смещает на размер записи)
 				service_record,
 				sizeof(Segment_def));
 
+			// так как service_record всЄ ещЄ указывает на нулевую запись, мы просто мен€ем то, что осталось по этому адресу
 			service_record->size = memory_to_allocate;
 			service_record->used = true;
+			// у новой сервисной записи тоже мен€ем смещение и размер
+			new_service_record->size -= memory_to_allocate;
+			new_service_record->offset += memory_to_allocate;
 
 			active_segment->descriptor_count++;
 
@@ -95,16 +100,18 @@ void* Heap::get_mem(int size)
 	segment_start = (size_t)active_segment->data;
 
 	// этот кусок можно вынести в функцию
-	service_record->size -= memory_to_allocate;
-	service_record->offset += memory_to_allocate;
-
-	memmove(service_record + sizeof(Segment_def), // сместить на один собственный размер
+	Segment_def* new_service_record = service_record + 1;
+	size_t bytes_to_move = sizeof(Segment_def);
+	memmove(new_service_record, // сместить на один собственный размер
 		service_record,
-		sizeof(Segment_def));
+		bytes_to_move);
 
 	// так как service_record всЄ ещЄ указывает на нулевую запись, мы просто мен€ем то, что осталось по этому адресу
 	service_record->size = memory_to_allocate;
 	service_record->used = true;
+	// у новой сервисной записи тоже мен€ем смещение и размер
+	new_service_record->size -= memory_to_allocate;
+	new_service_record->offset += memory_to_allocate;
 
 	active_segment->descriptor_count++;
 
@@ -124,7 +131,7 @@ void Heap::free_mem(void* address_void)
 	while (true)
 	{
 		segment_start = (size_t)active_segment->data;
-		if (address > segment_start && address < segment_start + SEGMENTSIZE)
+		if (address >= segment_start && address < segment_start + SEGMENTSIZE)
 			break;
 		active_segment = active_segment->prev;
 	}
@@ -140,8 +147,10 @@ void Heap::free_mem(void* address_void)
 	}
 
 	// если никто ничего не сломал, то сейчас offset и active_segment->descriptor[i].offset равны между собой
-	// если же надо учитывать, что пользователь - дебил, то сюда пойдЄт куча проверок
-	active_segment->descriptor[i + 1].used = false;
+	// надо учитывать, что пользователь - дебил, поэтому провер€ем равенство, а то всЄ может сломатьс€
+	if (offset != active_segment->descriptor[i].offset)
+		return;
+
 	bool is_next_free = false;
 	if (active_segment->descriptor[i+1].used == false)
 	{
@@ -191,7 +200,7 @@ int Heap::make_segment()
 	struct Segment* s = new Segment;
 	s->data = malloc(segment_size);
 	if (s == NULL || s->data == NULL)
-		return -1;
+		throw "heap exception";
 	s->prev = current;
 	current = s;
 	s->descriptor_count = 0;

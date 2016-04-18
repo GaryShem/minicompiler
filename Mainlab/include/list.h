@@ -18,7 +18,7 @@ public:
 	void       take_first(void* store);
 	void       take_last(void* store);
 	void       take(int pos, void* store);
-	void       sort(bool dir = true, int method = 0);
+	void       sort(bool dir = true, int(*method)(const void*, const void*) = 0);
 
 	int        count();
     bool       error() { return _error; } // true if error in last operation

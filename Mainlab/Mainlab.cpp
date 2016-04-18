@@ -10,21 +10,34 @@
 
 static Heap heap;
 
+int compar(const void* e1, const void* e2)
+{
+	int* n1 = (int*)e1;
+	int* n2 = (int*)e2;
+	return *n1 - *n2;
+}
+
 int _tmain(int argc, _TCHAR* argv[])
 {
-	int b = 3;
+	List list(sizeof(int));
 
-	int* a = (int*)heap.get_mem(sizeof(int));
+	int a;
+	int limit = 22;
+	for (int i = 0; i < limit; i++)
+	{
+		a = i;
+		list.add(&a);
+	}
 
-	*a = 3;
+	list.sort(false, compar);
 
-	std::string miimimi;
+	for (int i = 0; i < limit; i++)
+	{
+		list.take_first(&a);
+		std::cout << i << "..." << a << std::endl;
+	}
 
-	std::cout << *a << std::endl;
 
-	heap.free_mem(a);
-
-	getline(std::cin, miimimi);
 	return 0;
 }
 
