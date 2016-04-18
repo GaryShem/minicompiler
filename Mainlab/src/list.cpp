@@ -109,13 +109,13 @@ void List::take_last(void* store)
 	}
 	_error = false;
 	// сначала вы€сним индекс элемента только внутри последнего сегмента
-	int segment_index = (last_index % element_count) - 1;
+	int segment_index = (last_index - 1) % element_count;
 	// копируем элемент с этим индексом в store
 	memcpy(store, (void*)((size_t)last->data + segment_index*element_size), element_size);
 	// уменьшаем индекс последнего элемента
 	last_index--;
-
-	if (last_index % element_count == 0)
+	int n = *((int*)store);
+	if (segment_index == 0)
 	{ // если индекс за последним элементом стал в начале сегмента
 	  // то этот сегмент пуст и его надо удалить
 		Segment* new_last = last->prev;

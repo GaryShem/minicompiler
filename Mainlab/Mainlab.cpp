@@ -29,12 +29,12 @@ int _tmain(int argc, _TCHAR* argv[])
 		list.add(&a);
 	}
 
-	list.sort(false, compar);
+	//list.sort(false, compar);
 
-	for (int i = 0; i < limit; i++)
+	for (int j = 0; j < limit; j++)
 	{
-		list.take_first(&a);
-		std::cout << i << "..." << a << std::endl;
+		list.take_last(&a);
+		std::cout << j << "..." << a << std::endl;
 	}
 
 
