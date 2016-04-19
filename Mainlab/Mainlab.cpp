@@ -5,6 +5,7 @@
 #include "include/heap.h"
 #include "include/list.h"
 #include "include/list_adv.h"
+#include "include/hash.h"
 #include <iostream>
 #include <string>
 
@@ -19,7 +20,8 @@ int compar(const void* e1, const void* e2)
 
 int _tmain(int argc, _TCHAR* argv[])
 {
-	List list(sizeof(int));
+	// проверка первой лабы
+	/*List list(sizeof(int));
 
 	int a;
 	int limit = 22;
@@ -29,14 +31,38 @@ int _tmain(int argc, _TCHAR* argv[])
 		list.add(&a);
 	}
 
-	//list.sort(false, compar);
+	list.sort(false, compar);
 
 	for (int j = 0; j < limit; j++)
 	{
-		list.take_last(&a);
+		list.take_first(&a);
 		std::cout << j << "..." << a << std::endl;
 	}
 
+
+	return 0;*/ 
+
+	//проверка второй лабы
+
+	//для русского языка сделаем setlocale
+
+	setlocale(LC_ALL, "Russian");
+	Diction diction;
+	Article* record;
+	record = diction.auto_create("Баба-Яга");
+	record = diction.auto_create("Розовый слоник");
+
+	record = diction.find("Розовый слоник");
+
+	if (record)
+	{
+		std::cout << "Word: " << record->word << std::endl;
+		std::cout << "Description: " << record->description << std::endl;
+	}
+	else
+	{
+		std::cout << "Record not found" << std::endl;
+	}
 
 	return 0;
 }

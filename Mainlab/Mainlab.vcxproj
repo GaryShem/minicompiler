@@ -81,6 +81,7 @@
     <Text Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="include\hash.h" />
     <ClInclude Include="include\heap.h" />
     <ClInclude Include="include\list.h" />
     <ClInclude Include="include\list_adv.h" />
@@ -89,9 +90,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Mainlab.cpp" />
+    <ClCompile Include="src\hash.cpp" />
     <ClCompile Include="src\heap.cpp" />
     <ClCompile Include="src\list.cpp" />
-    <ClCompile Include="src\list_adv.cpp" />
     <ClCompile Include="stdafx.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

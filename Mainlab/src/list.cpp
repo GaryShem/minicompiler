@@ -18,8 +18,6 @@ List::~List()
 	Segment* current;
 	Segment* next;
 	current = first;
-	if (first == 0)
-		return;
 	while (current)
 	{
 		next = current->next;
@@ -44,6 +42,7 @@ void* List::get(int pos)
 	{ // если не в первом сегменте 
 		struct Segment* ourSegm = first->next;
 		pos = pos - (element_count - first_index);
+		// тут ищем индекс элемента в текущем сегменте ourSegm
 		while (pos >= element_count)
 		{
 			ourSegm = ourSegm->next;
@@ -60,7 +59,7 @@ void List::add(void* data)
 	if (first == 0 ||
 		(last_index % element_count == 0 && last->next == 0))
 	{ // если сегментов нет, или новый элемент не помещается в последний сегмент
-		new_segment();
+		new_segment(); // new_segment() переприсваивает last
 		memmove(last->data, data, element_size);
 	}
 	else
@@ -73,8 +72,7 @@ void List::add(void* data)
 
 void List::take_first(void* store)
 {
-	// если элементов нет, то выбросим эксепшн
-	// так себя ведут контейнеры в C#
+	// если элементов нет, то дадим ошибку
 	if (count() < 1)
 	{
 		_error = true;
@@ -109,25 +107,36 @@ void List::take_last(void* store)
 	}
 	_error = false;
 	// сначала выясним индекс элемента только внутри последнего сегмента
+	// так как last_index указывает на индекс элемента, следующего за последним, берём -1
 	int segment_index = (last_index - 1) % element_count;
 	// копируем элемент с этим индексом в store
 	memcpy(store, (void*)((size_t)last->data + segment_index*element_size), element_size);
 	// уменьшаем индекс последнего элемента
 	last_index--;
-	int n = *((int*)store);
+	//int n = *((int*)store); // дебуг
 	if (segment_index == 0)
 	{ // если индекс за последним элементом стал в начале сегмента
 	  // то этот сегмент пуст и его надо удалить
-		Segment* new_last = last->prev;
-		// удаляем старый последний сегмент
+		// удаляем старый последний сегмент - delete_segment() сам перенастраивает ссылки
 		delete_segment(last);
-		// настраиваем ссылку последнего сегмента на новый последний
-		last = new_last;
 	}
 }
 
 void List::take(int pos, void* store)
 {
+	// на всякий случай рассмотрим случай, где pos указывает на первый или последний элемента
+	// тогда вызываем соответствующий "быстрый" take_****
+	if (pos == 0)
+	{
+		take_first(store);
+		return;
+	}
+	else if (pos == count()-1)
+	{
+		take_last(store);
+		return;
+	}
+	
 	// сначала копируем нужный элемент в store
 	// адрес элемента получаем с помощью this->get()
 	memcpy(store, get(pos), element_size);
@@ -147,11 +156,8 @@ void List::take(int pos, void* store)
 	if (last_index % element_count == 0)
 	{ // если индекс за последним элементом стал в начале сегмента
 		// то этот сегмент пуст и его надо удалить
-		Segment* new_last = last->prev;
-		// удаляем старый последний сегмент
+		// удаляем старый последний сегмент - delete_segment() сам перенастраивает ссылки
 		delete_segment(last);
-		// настраиваем ссылку последнего сегмента на новый последний
-		last = new_last;
 	}
 }
 
@@ -164,14 +170,14 @@ void List::sort(bool dir, int (*method)(const void*, const void*))
 	for (int i = 0; i < count - 1; i++)
 	{
 		void* starting = get(i);
-		void* max = starting;
+		void* max_or_min = starting;
 		for (int j = i+1; j < count; j++)
 		{
 			// method должен быть функцией сравнения, принимающей указатели на два элемента
 			// возвращает 1 если первый элемент больше второго, 0 если они равны, -1 если первый меньше второго
 			void* current = get(j);
-			int n = *((int*)current);
-			int comparison_result = method(max, current);
+			//int n = *((int*)current); //дебуг
+			int comparison_result = method(max_or_min, current);
 			if (dir)
 			{
 				// так как dir == true для возрастающего порядка, для убывания достаточно
@@ -184,16 +190,16 @@ void List::sort(bool dir, int (*method)(const void*, const void*))
 			// то переприсваиваем указатель максимального (минимального) элемента
 			if (comparison_result < 0)
 			{
-				max = current;
+				max_or_min = current;
 			}
 		}
 		// теперь мы нашли номер максимального (или минимального) элемента
 		// если этот элемент - не "текущий", т.е. не i-ый, то меняем их местами
-		if (starting != max)
+		if (starting != max_or_min)
 		{
 			memcpy(buffer, starting, element_size);
-			memcpy(starting, max, element_size);
-			memcpy(max, buffer, element_size);
+			memcpy(starting, max_or_min, element_size);
+			memcpy(max_or_min, buffer, element_size);
 		}
 	}
 }
@@ -232,6 +238,7 @@ void List::delete_segment(Segment* seg)
 		return;
 
 	// убираем данный сегмент из цепочки (списка)
+	// существует ли предыдущий?
 	if (seg->prev == 0)
 	{ 
 		// если данный сегмент - первый, то просто смещаем указатель первого сегмента
@@ -243,6 +250,7 @@ void List::delete_segment(Segment* seg)
 		seg->prev->next = seg->next;
 	}
 
+	// существует ли следующий?
 	if (seg->next == 0)
 	{ 
 		// если данный сегмент - последний, то переприсваиваем последний сегмент
