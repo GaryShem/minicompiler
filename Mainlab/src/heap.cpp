@@ -4,10 +4,10 @@
 
 void* Heap::get_mem(int size)
 {
-	size_t memory_to_allocate = size/sizeof(int);//сколько 8-байтовых кусков мы выделим дл€ запрошенной области
-	if (size%sizeof(int))
+	size_t memory_to_allocate = size/cluster_size; //сколько кластеров мы выделим дл€ запрошенной области
+	if (size%cluster_size)
 		memory_to_allocate++;
-	memory_to_allocate *= sizeof(int); //преобразовали в байты
+	memory_to_allocate *= cluster_size; //преобразовали в байты
 	Segment* active_segment = current;
 	Segment_def* service_record;
 	size_t segment_start;
@@ -20,6 +20,7 @@ void* Heap::get_mem(int size)
 		//if (activeSegment->descriptor[activeSegment->descriptor_count].size >= region_count)
 		if (service_record->size >= memory_to_allocate && active_segment->descriptor_count < SEGMENTCOUNT)
 		{ // если влезает в конец
+			return add_to_segment_end(memory_to_allocate, active_segment);
 			service_record->size -= memory_to_allocate;
 			service_record->offset += memory_to_allocate;
 			Segment_def* new_service_record = service_record + 1;
@@ -92,6 +93,7 @@ void* Heap::get_mem(int size)
 	make_segment();
 
 	// по-хорошему, это стоит вынести в функцию, но ограничени€ на изменени€ header-a - —ѕ–ќ—»“№
+	return add_to_segment_end(memory_to_allocate, current);
 
 	// переприсваиваем указатели
 	service_record = &current->descriptor[0];
@@ -113,6 +115,30 @@ void* Heap::get_mem(int size)
 	new_service_record->offset += memory_to_allocate;
 
 	active_segment->descriptor_count++;
+
+	return (void*)(segment_start + service_record->offset);
+}
+
+void* Heap::add_to_segment_end(int size, Segment* segment)
+{
+	Segment_def* service_record = &segment->descriptor[segment->descriptor_count];
+	size_t segment_start = (size_t)segment->data;
+
+	// этот кусок можно вынести в функцию
+	Segment_def* new_service_record = service_record + 1;
+	size_t bytes_to_move = sizeof(Segment_def);
+	memmove(new_service_record, // сместить на один собственный размер
+		service_record,
+		bytes_to_move);
+
+	// так как service_record всЄ ещЄ указывает на нулевую запись, мы просто мен€ем то, что осталось по этому адресу
+	service_record->size = size;
+	service_record->used = true;
+	// у новой сервисной записи тоже мен€ем смещение и размер
+	new_service_record->size -= size;
+	new_service_record->offset += size;
+
+	segment->descriptor_count++;
 
 	return (void*)(segment_start + service_record->offset);
 }
