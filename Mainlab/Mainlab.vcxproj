@@ -81,6 +81,7 @@
     <Text Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="include\automaton.h" />
     <ClInclude Include="include\hash.h" />
     <ClInclude Include="include\heap.h" />
     <ClInclude Include="include\list.h" />
@@ -90,6 +91,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Mainlab.cpp" />
+    <ClCompile Include="src\automaton.cpp" />
     <ClCompile Include="src\hash.cpp" />
     <ClCompile Include="src\heap.cpp" />
     <ClCompile Include="src\list.cpp" />

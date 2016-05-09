@@ -6,6 +6,7 @@
 #include "include/list.h"
 #include "include/list_adv.h"
 #include "include/hash.h"
+#include "include/automaton.h"
 #include <iostream>
 #include <string>
 
@@ -46,9 +47,10 @@ int _tmain(int argc, _TCHAR* argv[])
 
 	//для русского языка сделаем setlocale
 
-	setlocale(LC_ALL, "Russian");
+	/*setlocale(LC_ALL, "Russian");
 	Diction diction;
 	Article* record;
+	record = diction.auto_create("mimimi");
 	record = diction.auto_create("Баба-Яга");
 	record = diction.auto_create("Розовый слоник");
 
@@ -63,6 +65,13 @@ int _tmain(int argc, _TCHAR* argv[])
 	{
 		std::cout << "Record not found" << std::endl;
 	}
+
+	return 0;*/
+
+	// проверка автомата
+	automaton tomaton("keywords.txt");
+	tomaton.generate_triads();
+	tomaton.print_triads();
 
 	return 0;
 }
