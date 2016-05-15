@@ -5,9 +5,10 @@
 
 static Heap heap;
 
-automaton::automaton(char* filename) : triads_list(sizeof(Triad))
+automaton::automaton(char* filename, char wildcard) : triads_list(sizeof(Triad))
 {
 	this->filename = filename;
+	this->wildcard = wildcard;
 }
 
 automaton::~automaton()
@@ -90,16 +91,12 @@ void automaton::generate_triads()
 			{ 
 				// если мы не смогли найти триаду, которая соответствует текущему состоянию,
 				// то просто по порядку генерируем новые, т.к. там уже не будет повторений
-
-				// вообще говоря, разные ветви в теории могли бы сойтись обратно (например, ClaSS и CheSS)
-				// но это потребовало бы очень сильного усложнения алгоритма и множества лишних проверок,
-				// поэтому после первого расхождения мы считаем, что каждое слово "идёт своим путём"
 				max_state = create_new_triads(word, letter_index, current_state, max_state);
 				break;
 			}
 			else
 			{
-				current_state = current_triad->current_state;
+				current_state = current_triad->next_state;
 			}
 			letter_index++;
 		}
@@ -108,6 +105,92 @@ void automaton::generate_triads()
 
 	file.close();
 	heap.free_mem(word);
+}
+
+void automaton::read_triads(char delimiter)
+{
+	std::ifstream file(filename);
+	int word_length;
+	word_length = 100;
+	char* triad_line = (char*)heap.get_mem(word_length);
+	char* buffer = (char*)heap.get_mem(word_length);
+	int current_state;
+	int next_state;
+	int letter_index;
+	char symbol;
+	bool is_state_negative;
+	Triad* current_triad;
+	char* numbers = "0123456789";
+
+	// читаем файл по строкам, т.е. по одному слову
+	while (file.getline(triad_line, word_length))
+	{
+		// и начинаем с первой буквы
+		letter_index = 0;
+		if (triad_line[letter_index] == '-')
+		{
+			is_state_negative = true;
+			letter_index++;
+		}
+		else
+		{
+			is_state_negative = false;
+		}
+		char alphabet[] = "qwertyuioopasdfghjklzxcvbnm";
+		int buffer_index = 0;
+		current_state = 0;
+		next_state = 0;
+		while (strchr(numbers, triad_line[letter_index]))
+		{
+			current_state = current_state * 10 + (triad_line[letter_index] - '0');
+			letter_index++;
+		}
+		if (is_state_negative)
+		{
+			current_state *= -1;
+		}
+		while (triad_line[letter_index] == delimiter)
+		{
+			letter_index++;
+		}
+		symbol = triad_line[letter_index];
+		letter_index++;
+
+		while (triad_line[letter_index] == delimiter)
+		{
+			letter_index++;
+		}
+
+		if (triad_line[letter_index] == '-')
+		{
+			is_state_negative = true;
+			letter_index++;
+		}
+		else
+		{
+			is_state_negative = false;
+		}
+
+		while (triad_line[letter_index] != 0 && strchr(numbers, triad_line[letter_index]))
+		{
+			next_state = next_state * 10 + (triad_line[letter_index] - '0');
+			letter_index++;
+		}
+		if (is_state_negative)
+		{
+			next_state *= -1;
+		}
+
+		current_triad = new Triad();
+		current_triad->current_state = current_state;
+		current_triad->symbol = symbol;
+		current_triad->next_state = next_state;
+		triads_list.add(current_triad);
+	}
+
+
+	file.close();
+	heap.free_mem(triad_line);
 }
 
 void automaton::print_triads()

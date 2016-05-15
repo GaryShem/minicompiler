@@ -69,9 +69,13 @@ int _tmain(int argc, _TCHAR* argv[])
 	return 0;*/
 
 	// проверка автомата
-	automaton tomaton("keywords.txt");
-	tomaton.generate_triads();
-	tomaton.print_triads();
+	//automaton tomaton("keywords.txt");
+	//tomaton.generate_triads();
+	//tomaton.print_triads();
+
+	automaton tomaton2("keywords_triads.txt");
+	tomaton2.read_triads();
+	tomaton2.print_triads();
 
 	return 0;
 }
