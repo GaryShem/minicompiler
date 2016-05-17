@@ -3,7 +3,6 @@
 
 #include <cstring>
 
-#define TABLE_COUNT 12
 
 static Heap heap;
 
@@ -11,16 +10,16 @@ Hash::Hash(int _n1, int _n2, int _n3, int _n4, int _n5)
 {
 	// если параметр больше или равен 0, то присваиваем его
 	// иначе присваиваем 0
-	n1 = _n1 > 0 ? _n1 : 0;
-	n2 = _n2 > 0 ? _n2 : 0;
-	n3 = _n3 > 0 ? _n3 : 0;
-	n4 = _n4 > 0 ? _n4 : 0;
-	n5 = _n5 > 0 ? _n5 : 0;
-
+	n1 = _n1 > 1 ? _n1 : 1;
+	n2 = _n2 > 1 ? _n2 : 1;
+	n3 = _n3 > 1 ? _n3 : 1;
+	n4 = _n4 > 1 ? _n4 : 1;
+	n5 = _n5 > 1 ? _n5 : 1;
+	table_count = n1*n2*n3*n4*n5;
 	// —ѕ–ќ—»“№
 	// сейчас создание самих листов перенесено в наследника, потому что листы могут быть разных типов
 	// количество таблиц фиксированное - 12, потому что непон€тно что именно делать
-	table = (List**)heap.get_mem(TABLE_COUNT*sizeof(List*));
+	table = (List**)heap.get_mem(table_count*sizeof(List*));
 }
 
 Hash::~Hash()
@@ -38,7 +37,7 @@ List* Hash::find_list(char* key_word)
 	k4 = key4(key_word);
 	k5 = key5(key_word);
 	// комбинируем их и находим номер нужной таблицы
-	int table_index = combine_keys(k1, k2, k3, k4, k5) % TABLE_COUNT;
+	int table_index = combine_keys(k1, k2, k3, k4, k5) % table_count;
 	// возвращаем на неЄ указатель
 	return table[table_index];
 }
@@ -127,7 +126,7 @@ void Diction_list::del(char* word)
 Diction::Diction() : Hash(33, 33, 0, 0, 0)
 {
 	// через цикл создаЄм нужное количество таблиц
-	for (int i = 0; i < TABLE_COUNT; i++)
+	for (int i = 0; i < get_table_count(); i++)
 	{
 		table[i] = new Diction_list();
 	}
@@ -135,7 +134,7 @@ Diction::Diction() : Hash(33, 33, 0, 0, 0)
 Diction::~Diction()
 {
 	// через цикл удал€ем все созданные таблицы
-	for (int i = 0; i < TABLE_COUNT; i++)
+	for (int i = 0; i < get_table_count(); i++)
 	{
 		delete(table[i]);
 	}
@@ -185,7 +184,7 @@ Article* Diction::auto_create(char* word)
 int Diction::key1(char* key_word) {
 	// спросить о проверках на null дл€ key_word
 	int f = key_word[0];
-	return f > 0 ? f%n1 : 0;
+	return f > 0 ? f%get_n1() : 0;
 }
 int Diction::key2(char* key_word)
 {
@@ -194,5 +193,5 @@ int Diction::key2(char* key_word)
 		return 0;
 
 	int f = key_word[1];
-	return f > 0 ? f%n2 : 0;
+	return f > 0 ? f%get_n2() : 0;
 }

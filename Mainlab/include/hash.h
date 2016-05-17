@@ -26,7 +26,17 @@ protected:
 			k5*n1*n2*n3*n4;
 	}
 	// перенесено из private, чтобы можно было создать листы нужных типов
+
 	List** table;
+	int get_n1() { return n1; };
+	int get_n2() { return n2; };
+	int get_n3() { return n3; };
+	int get_n4() { return n4; };
+	int get_n5() { return n5; };
+	int get_table_count() { return table_count; }
+
+private:
+	int table_count;
 	int    n1,n2,n3,n4,n5;
 };
 
