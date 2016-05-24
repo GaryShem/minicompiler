@@ -18,10 +18,10 @@
     <Text Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="stdafx.h">
+    <ClInclude Include="include\automaton.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="targetver.h">
+    <ClInclude Include="include\hash.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="include\heap.h">
@@ -33,18 +33,30 @@
     <ClInclude Include="include\list_adv.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="include\hash.h">
+    <ClInclude Include="include\Static_analyzer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="include\automaton.h">
+    <ClInclude Include="include\stdafx.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\targetver.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\variable.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\lexem.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\tree.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="stdafx.cpp">
+    <ClCompile Include="src\automaton.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Mainlab.cpp">
+    <ClCompile Include="src\hash.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\heap.cpp">
@@ -53,10 +65,19 @@
     <ClCompile Include="src\list.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\hash.cpp">
+    <ClCompile Include="src\Static_analyzer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\automaton.cpp">
+    <ClCompile Include="src\stdafx.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Mainlab.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\variable.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tree.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
