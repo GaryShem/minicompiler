@@ -3,23 +3,20 @@
 #include "../include/variable.h"
 #include <fstream>
 #include <iostream>
+#include <sstream>
 
 static Heap heap;
 
 void StaticAnalyzer::form_lexem_list()
 {
 	automaton automatons[]{
-		automaton("keywords_triads.txt"),
-		automaton("numeric_constant_triads.txt", '?'),
-		automaton("parentheses_triads.txt", '?', false),
-		automaton("variable_name_triads.txt", '?'),
-		automaton("operation_triads.txt"),
-		automaton("operation_delimiter.txt")
+		automaton("triads/keywords.txt"),
+		automaton("triads/numeric_constants.txt", '?'),
+		automaton("triads/braces.txt", '?', false),
+		automaton("triads/variable_names.txt", '?'),
+		automaton("triads/operations.txt"),
+		automaton("triads/operation_delimiter.txt")
 	};
-	//	automaton keyword_tomaton("keywords_triads.txt");
-	//	automaton var_name_tomaton("variable_name_triads.txt");
-	//	automaton numeric_constant_tomaton("numeric_constant_triads.txt");
-	//	automaton operation_tomaton("operation_triads.txt");
 
 
 	std::ifstream file(_filename);
@@ -28,6 +25,7 @@ void StaticAnalyzer::form_lexem_list()
 	int line_number = 0;
 	while (file.getline(program_line, 10000))
 	{
+		line_number++;
 		Lexem* lex;
 		int index = 0;
 		while (program_line[index] != 0)
@@ -37,10 +35,18 @@ void StaticAnalyzer::form_lexem_list()
 				lex = automatons[i].check(program_line, index);
 				if (lex != NULL)
 				{
+					lex->line = line_number;
 					switch (i)
 					{
 					case 0:
-						lex->type = LexemType::KEYWORD;
+						if (lex->code >= 11000)
+						{
+							lex->type = LexemType::FLOW_CONTROL;
+						}
+						else
+						{
+							lex->type = LexemType::KEYWORD;
+						}
 						break;
 					case 1:
 					{
@@ -48,7 +54,8 @@ void StaticAnalyzer::form_lexem_list()
 						lex->const_value = 0;
 						for (int zzz = lex->starting_position; zzz < lex->last_position; zzz++)
 						{
-							lex->const_value = lex->const_value * 10 + (program_line[zzz] - '0');
+							int base = 10;
+							lex->const_value = lex->const_value * base + (program_line[zzz] - '0');
 						}
 					}
 						break;
@@ -80,7 +87,7 @@ void StaticAnalyzer::form_lexem_list()
 						lex->type = LexemType::OPERATOR_DELIMITER;
 						break;
 					default:
-						throw 101548;
+						throw (std::string("Syntax error on line ") + std::to_string(line_number)).c_str();
 					}
 
 					_lexems.add(lex);
@@ -95,11 +102,17 @@ void StaticAnalyzer::form_lexem_list()
 	for (int i = 0; i < _lexems.count(); i++)
 	{
 		Lexem* lex = (Lexem*)_lexems.get(i);
-		std::cout << i << ": " << lex->starting_position << " " << lex->last_position << " " << lex->type << " ";
+		std::cout << i << ": (" << lex->code << ") " << lex->starting_position << " " << lex->last_position << " " << lex->type << " ";
 		switch (lex->type)
 		{
 		case LexemType::KEYWORD:
-			std::cout << "Keyword";
+			std::cout << "Keyword (Unspecified)";
+			break;
+		case LexemType::VARIABLE_DECLARATION:
+			std::cout << "Keyword (Variable Declaration)";
+			break;
+		case LexemType::FLOW_CONTROL:
+			std::cout << "Keyword (Flow Control)";
 			break;
 		case LexemType::NUMERIC_CONST:
 			std::cout << "Constant";
@@ -149,24 +162,51 @@ int StaticAnalyzer::check_parentheses()
 	}
 	if (result == false)
 	{
-		std::cout << "Error on lexem " << i << std::endl;
+		std::cout << "Error on lexem " << i  << " (line " << ((Lexem*)_lexems.get(i))->line << ")" << std::endl;
 		return i;
 	}
 	return 0;
 }
 
-int StaticAnalyzer::check_variables_existence()
+int StaticAnalyzer::check_variables_existence(Variable_List* current_variable_list, int starting_index)
 {
+	int list_number = current_variable_list->_list_number;
 	int limit = _lexems.count();
-	for (int i = 0; i < limit; i++)
+	if (current_variable_list == NULL)
+	{
+		std::cout << "Starting variable check" << std::endl;
+		current_variable_list = &_global_variables;
+	}
+	for (int i = starting_index; i < limit; i++)
 	{
 		Lexem* lexem = (Lexem*)_lexems.get(i);
-		if (lexem->type != LexemType::VARIABLE_NAME)
+		if (lexem->type != LexemType::VARIABLE_NAME && lexem->type != LexemType::PARENTHESES)
 		{
 			continue;
 		}
+
+		// если нашли открывающуюс€ фигурную скобку, то рекурсивно запускаем программу,
+		// создава€ при этом новый список переменных - под новую область видимости
+		if (lexem->type == LexemType::PARENTHESES)
+		{
+			if (lexem->code == CURLY_OPEN)
+			{
+				list_number++;
+				Variable_List* new_variable_list = new Variable_List(current_variable_list, list_number);
+				current_variable_list->_children_list.add(new_variable_list);
+				check_variables_existence(new_variable_list, i+1);
+				i = lexem->pair_brace_position;
+			}
+			else if (lexem->code == CURLY_CLOSE)
+			{
+				return 0;
+			}
+			continue;
+		}
+
 		// если нашли переменную, то провер€ем, существует ли она
-		Variable_Record* variable = _variables.get_variable(lexem->word_string);
+		// при этом поиск идЄт с текущей области видимости "вверх" до глобальной
+		Variable_Record* variable = current_variable_list->get_variable(lexem->word_string);
 
 		// если переменна€ не объ€влена
 		if (variable == NULL )
@@ -181,40 +221,70 @@ int StaticAnalyzer::check_variables_existence()
 				Lexem* previous_lexem = (Lexem*)_lexems.get(i - 1);
 				variable->value = new Value((VARIABLE_TYPE)(previous_lexem->code));
 
-				_variables.add(variable);
+				current_variable_list->add(variable);
+				lexem->variable = current_variable_list->get_variable(lexem->word_string);
 			}
 		}
 		// если переменна€ объ€вл€етс€ второй раз
 		else if (variable != NULL && ((Lexem*)_lexems.get(i - 1))->type == LexemType::KEYWORD)
 		{
+			std::ostringstream oss;
+			oss << "Second declaration of variable ";
+			oss << variable->name;
+			oss << " in lexem ";
+			oss << i;
+			oss << " on line ";
+			oss << lexem->line;
+			oss << std::endl;
+			throw oss.str().c_str();
 			std::cout << "Second declaration of variable " << variable->name << " in lexem " << i << std::endl;
 		}
 	}
 	return 0;
 }
 
-void StaticAnalyzer::print_variables()
+int StaticAnalyzer::check_flow()
 {
-	int limit = _variables.count();
+	int limit = _global_variables.count();
 	for (int i = 0; i < limit; i++)
 	{
-		Variable_Record* var = (Variable_Record*)_variables.get(i);
+		Variable_Record* var = (Variable_Record*)_global_variables.get(i);
+		std::cout << var->name << "   ";
+		switch (var->value->type)
+		{
+			case INT:
+				std::cout << "int " << (int)var->value->value << std::endl;
+				break;
+			case DOUBLE:
+				std::cout << "double " << (double)var->value->value << std::endl;
+				break;
+			default:
+				std::cout << "UNKNOWN! ACHTUNG!" << std::endl;
+				break;
+		}
+	}
+}
+
+void StaticAnalyzer::print_variables(int indent)
+{
+	int limit = _global_variables.count();
+	for (int i = 0; i < limit; i++)
+	{
+		Variable_Record* var = (Variable_Record*)_global_variables.get(i);
 		std::cout << var->name << "   ";
 		switch (var->value->type)
 		{
 		case INT:
-			std::cout << "int " << *(int*)var->value->value << std::endl;
+			std::cout << "int " << (int)var->value->value << std::endl;
 			break;
 		case DOUBLE:
-			std::cout << "double " << *(int*)var->value->value << std::endl;
-			break;
-		case CHAR:
-			std::cout << "char " << *(int*)var->value->value << std::endl;
+			std::cout << "double " << (double)var->value->value << std::endl;
 			break;
 		default:
-			std::cout << "UNKNOWN! ACHTUNG!";
+			std::cout << "UNKNOWN! ACHTUNG!" << std::endl;
 			break;
-		} 
+		}
+		std::cout << std::endl;
 	}
 }
 
@@ -222,6 +292,7 @@ bool StaticAnalyzer::find_pair_parentheses(int closing_parenthesis_code, int* br
 {
 	int limit = _lexems.count();
 	int i = *brace_position + 1;
+	int opening_brace = *brace_position;
 	bool result;
 	while (i < limit)
 	{
@@ -230,13 +301,15 @@ bool StaticAnalyzer::find_pair_parentheses(int closing_parenthesis_code, int* br
 		if (current_lexem->type == LexemType::PARENTHESES)
 		{
 			int code = current_lexem->code;
-				*brace_position = i;
+			*brace_position = i;
 			//у закрывающихс€ скобок нечЄтный код
 			if (code % 2 == 1)
 			{
 				if (code == closing_parenthesis_code)
 				{
 					result = true;
+					current_lexem->pair_brace_position = opening_brace;
+					((Lexem*)_lexems.get(opening_brace))->pair_brace_position = i;
 					break;
 				}
 				else

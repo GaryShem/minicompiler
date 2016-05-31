@@ -5,37 +5,38 @@ static Heap heap;
 Value::Value(VARIABLE_TYPE type)
 {
 	this->type = type;
-	switch (type)
-	{
-	case INT:
-		value = heap.get_mem(sizeof(int));
-		break;
-	case DOUBLE:
-		value = heap.get_mem(sizeof(double));
-		break;
-	case CHAR:
-		value = heap.get_mem(sizeof(char));
-		break;
-	default:
-		throw 654647;
-	}
 }
 
-Variable_List::Variable_List() : List(sizeof(Variable_Record))
+Value::~Value()
 {
+}
 
+Variable_List::Variable_List(Variable_List* parent_list, int list_number) : List(sizeof(Variable_Record)), _children_list(sizeof(Variable_List))
+{
+	_parent_list = parent_list;
+	_list_number = list_number;
+}
+
+Variable_List::~Variable_List()
+{
 }
 
 Variable_Record* Variable_List::get_variable(char* var_name)
 {
-	int limit = count();
-	for (int i = 0; i < limit; i++)
+
+	Variable_List* current = this;
+	while (current != NULL)
 	{
-		Variable_Record* result = (Variable_Record*)get(i);
-		if (strcmp(var_name, result->name) == 0)
+		int limit = current->count();
+		for (int i = 0; i < limit; i++)
 		{
-			return result;
+			Variable_Record* result = (Variable_Record*)current->get(i);
+			if (strcmp(var_name, result->name) == 0)
+			{
+				return result;
+			}
 		}
+		current = current->_parent_list;
 	}
 	return NULL;
 }

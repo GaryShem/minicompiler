@@ -7,46 +7,43 @@ enum VARIABLE_TYPE
 {
 	INT = 10010,
 	DOUBLE,
-	CHAR
 };
 
 class Value
 {
 public:
 	Value(VARIABLE_TYPE type);
+	~Value();
 	VARIABLE_TYPE type;
-	void* value;
+	double value;
 };
 class Variable_Record
 {
 public:
 	char* name;
 	Value* value;
-	Variable_Record(char* name)
+	Variable_Record(char* name, Value* value = NULL)
 	{
 		this->name = new char[strlen(name) + 1];
 		strcpy(this->name, name);
+		this->value = value;
 	}
 	~Variable_Record()
 	{
 		delete[] name;
 		delete (value);
 	}
-	void* GetValue() { return value->value; }
-	void SetValue(Value* new_value)
-	{
-		if (new_value->type != value->type)
-			throw "Invalid Variable Type Assignment";
-		value->value = new_value->value;
-	}
 };
 
 class Variable_List : public List
 {
 public:
-	Variable_List();
+	Variable_List(Variable_List* parent_list, int list_number);
+	~Variable_List();
 	Variable_Record* get_variable(char* var_name);
-
+	Variable_List* _parent_list;
+	List _children_list;
+	int _list_number;
 };
 
 #endif

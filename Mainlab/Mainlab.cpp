@@ -15,25 +15,27 @@
 
 static Heap heap;
 
-int compar(const void* e1, const void* e2)
-{
-	int* n1 = (int*)e1;
-	int* n2 = (int*)e2;
-	return *n1 - *n2;
-}
-
 int _tmain(int argc, _TCHAR* argv[])
 {
-	StaticAnalyzer sa("test_program.txt");
-	sa.form_lexem_list();
-	sa.check_parentheses();
-	sa.check_variables_existence();
-	sa.print_variables();
-	TreeNode tn;
-	tn.form_tree(&sa._lexems, 3, 8);
-	tn.solve(&sa._variables);
-	sa.print_variables();
-
+	try {
+		StaticAnalyzer sa("test_program.txt");
+		sa.form_lexem_list();
+		sa.check_parentheses();
+		sa.check_variables_existence();
+		sa.print_variables();
+		TreeNode tn;
+		tn.form_expression_tree(&sa._lexems, 3, 12);
+		tn.solve(&sa._global_variables);
+		sa.print_variables();
+	}
+	catch (int errNo)
+	{
+		std::cout << "Error code " << errNo << std::endl;
+	}
+	catch (char* msg)
+	{
+		std::cout << "Error message: " << msg << std::endl;
+	}
 	return 0;
 }
 

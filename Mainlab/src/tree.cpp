@@ -7,20 +7,39 @@ TreeNode::TreeNode()
 	lexem = NULL;
 }
 
-TreeNode* TreeNode::form_tree(List* lexems, int first_index, int last_index)
+TreeNode* TreeNode::form_expression_tree(List* lexems, int first_index, int last_index)
 {
-	int brace_count = 0;
 	int max_code = -1;
 	int priority_index = -1;
-	if (last_index - first_index == 1) // если осталась одна лексема, то просто пишем еЄ в нод - это лист дерева
+	// если осталась одна лексема, то просто пишем еЄ в нод - это лист дерева
+	if (last_index - first_index == 1)
 	{
 		this->lexem = (Lexem*)lexems->get(first_index);
 		return this;
 	}
+	// убираем окаймл€ющие скобки - если перва€ и последн€€ лексема €вл€ютс€ парными скобками,
+	// в качестве выражени€ берЄм то, что было внутри скобок,
+	// при этом сами скобки нам уже неинтересны
+	Lexem* first_lexem = (Lexem*)lexems->get(first_index);
+	if (first_lexem->type == LexemType::PARENTHESES && first_lexem->pair_brace_position == last_index-1)
+	{
+		return form_expression_tree(lexems, first_index + 1, last_index-1);
+	}
 	for (int i = first_index; i < last_index; i++)
 	{
 		Lexem* lex = (Lexem*)lexems->get(i);
-		if (lex->type == LexemType::OPERATION && lex->code > max_code)
+		if (lex->type == PARENTHESES)
+		{
+			if (lex->code % 2 == 0)
+			{
+				i = lex->pair_brace_position;
+			}
+			else
+			{
+				throw 46843;
+			}
+		}
+		else if (lex->type == LexemType::OPERATION && lex->code > max_code)
 		{
 			max_code = lex->code;
 			priority_index = i;
@@ -28,9 +47,9 @@ TreeNode* TreeNode::form_tree(List* lexems, int first_index, int last_index)
 	}
 	lexem = (Lexem*)lexems->get(priority_index);
 	left_node = new TreeNode;
-	left_node->form_tree(lexems, first_index, priority_index);
+	left_node->form_expression_tree(lexems, first_index, priority_index);
 	right_node = new TreeNode;
-	right_node->form_tree(lexems, priority_index + 1, last_index);
+	right_node->form_expression_tree(lexems, priority_index + 1, last_index);
 	return this;
 }
 
@@ -47,16 +66,22 @@ Value* TreeNode::solve(Variable_List* variables)
 		case ASSIGNMENT:
 			lvalue = left_node->solve(variables);
 			rvalue = right_node->solve(variables);
-			if (lvalue->type != rvalue->type)
-				throw 6545642;
 			return solve_assignment(lvalue, rvalue);
 			break;
 		case BINARY_PLUS:
 			lvalue = left_node->solve(variables);
 			rvalue = right_node->solve(variables);
-			if (lvalue->type != rvalue->type)
-				throw 6545642;
 			return solve_addition(lvalue, rvalue);
+			break;
+		case MULTIPLICATION:
+			lvalue = left_node->solve(variables);
+			rvalue = right_node->solve(variables);
+			return solve_multiplication(lvalue, rvalue);
+			break;
+		case IS_EQUAL:
+			lvalue = left_node->solve(variables);
+			rvalue = right_node->solve(variables);
+			return solve_multiplication(lvalue, rvalue);
 			break;
 		default:
 			throw 285307;
@@ -64,14 +89,15 @@ Value* TreeNode::solve(Variable_List* variables)
 		break;
 	case VARIABLE_NAME: 
 	{
-		Variable_Record* res = variables->get_variable(lexem->word_string);
-		return res->value;
+		return lexem->variable->value;
+//		Variable_Record* res = variables->get_variable(lexem->word_string);
+//		return res->value;
 	}
 		break;
 	case NUMERIC_CONST: 
 	{
 		Value* res = new Value(VARIABLE_TYPE::INT);
-		memcpy(res->value, &(lexem->const_value), sizeof(int));
+		res->value = lexem->const_value;
 		return res;
 	}
 		break;
@@ -85,55 +111,144 @@ Value* TreeNode::solve(Variable_List* variables)
 
 Value* TreeNode::solve_addition(Value* lvalue, Value* rvalue)
 {
+	Value* res = new Value(INT);
 	switch (lvalue->type)
 	{
-	case INT:
-	{	
-		Value* res = new Value(INT);
-		int *resnum = (int*)res->value;
-		int *lnum = (int*)lvalue->value;
-		int *rnum = (int*)rvalue->value;
-		*resnum = *lnum + *rnum;
-		return res;
-	}
+		case INT:
+		{
+			res->type = INT;
+			int lnum = (int)lvalue->value;
+			switch (rvalue->type)
+			{
+				case INT:
+				{
+					int rnum = (int)rvalue->value;
+					res->value = lnum + rnum;
+				}
+				break;
+				case DOUBLE:
+				{
+					res->type = DOUBLE;
+					int rnum = (double)rvalue->value;
+					res->value = lnum + rnum;
+				}
+				break;
+				default:
+					throw 12648;
+					break;
+			}
+		}
 		break;
-	case DOUBLE:
-	{
-		Value* res = new Value(DOUBLE);
-		double *resnum = (double*)res->value;
-		double *lnum = (double*)lvalue->value;
-		double *rnum = (double*)rvalue->value;
-		*resnum = *lnum + *rnum;
-		return res;
-	}
+		case DOUBLE:
+		{
+			res->type = DOUBLE;
+			double lnum = (double)lvalue->value;
+			switch (rvalue->type)
+			{
+				case INT:
+				{
+					int rnum = (int)rvalue->value;
+					res->value = lnum + rnum;
+				}
+				break;
+				case DOUBLE:
+				{
+					int rnum = (double)rvalue->value;
+					res->value = lnum + rnum;
+				}
+				break;
+				default:
+					throw 12648;
+					break;
+			}
+		}
 		break;
-	default:
-		throw 546546351;
+		default:
+			throw 546546351;
 	}
+	return res;
 }
 
 Value* TreeNode::solve_assignment(Value* lvalue, Value* rvalue)
 {
-	memcpy(lvalue->value, rvalue->value, get_op_size(lvalue));
+	switch (lvalue->type)
+	{
+	case INT:
+		lvalue->value = (int)rvalue->value;
+		break;
+	case DOUBLE:
+		lvalue->value = (int)rvalue->value;
+		break;
+	default: 
+		throw 18260148;
+		break;
+	}
 	return lvalue;
 }
 
-int TreeNode::get_op_size(Value* value)
+Value* TreeNode::solve_multiplication(Value* lvalue, Value* rvalue)
 {
-	int result;
-	switch (value->type)
+	Value* res = new Value(INT);
+	switch (lvalue->type)
 	{
-	case INT:
-		result = sizeof(int);
+		case INT:
+		{
+			res->type = INT;
+			int lnum = (int)lvalue->value;
+			switch (rvalue->type)
+			{
+				case INT:
+				{
+					int rnum = (int)rvalue->value;
+					res->value = lnum * rnum;
+				}
+				break;
+				case DOUBLE:
+				{
+					res->type = DOUBLE;
+					int rnum = (double)rvalue->value;
+					res->value = lnum * rnum;
+				}
+				break;
+				default:
+					throw 12648;
+					break;
+			}
+		}
 		break;
-	case DOUBLE:
-		result = sizeof(double);
+		case DOUBLE:
+		{
+			res->type = DOUBLE;
+			double lnum = (double)lvalue->value;
+			switch (rvalue->type)
+			{
+				case INT:
+				{
+					int rnum = (int)rvalue->value;
+					res->value = lnum * rnum;
+				}
+				break;
+				case DOUBLE:
+				{
+					int rnum = (double)rvalue->value;
+					res->value = lnum * rnum;
+				}
+				break;
+				default:
+					throw 12648;
+					break;
+			}
+		}
 		break;
-	case CHAR:
-		result = sizeof(char);
-		break;
-	default:
-		throw 1238912;
+		default:
+			throw 546546351;
 	}
-	return result;
+	return res;
+}
+
+Value* TreeNode::solve_is_equal(Value* lvalue, Value* rvalue)
+{
+	Value* res = new Value(INT);
+	res->value = (lvalue->value == rvalue->value);
+	return res;
 }

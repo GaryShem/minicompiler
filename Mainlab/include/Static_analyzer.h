@@ -5,22 +5,20 @@
 #include "list.h"
 #include "automaton.h"
 
-
-
-
 class StaticAnalyzer
 {
 public:
-	StaticAnalyzer(char* filename) :_lexems(sizeof(Lexem))
+	StaticAnalyzer(char* filename) :_lexems(sizeof(Lexem)), _global_variables(NULL, 0)
 	{
 		_filename = filename;
 		is_program_correct = true;
 	}
 	void form_lexem_list();
 	int check_parentheses();
-	int check_variables_existence();
-	void print_variables();
-	Variable_List _variables;
+	int check_variables_existence(Variable_List* current_variable_list = NULL, int starting_index = 0);
+	int check_flow();
+	void print_variables(int indent = 0);
+	Variable_List _global_variables;
 	List _lexems;
 private:
 
