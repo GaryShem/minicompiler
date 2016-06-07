@@ -20,21 +20,26 @@ int _tmain(int argc, _TCHAR* argv[])
 	try {
 		StaticAnalyzer sa("test_program.txt");
 		sa.form_lexem_list();
+		sa.print_lexem_list();
 		sa.check_parentheses();
 		sa.check_variables_existence();
+		sa.check_parentheses();
+		sa.print_lexem_list();
 		sa.print_variables();
-		TreeNode tn;
-		tn.form_expression_tree(&sa._lexems, 3, 12);
-		tn.solve(&sa._global_variables);
+
+		Forest f;
+		f.form_forest(&sa._lexems, 0, sa._lexems.count());
+		sa.print_variables();
+		f.solve();
 		sa.print_variables();
 	}
 	catch (int errNo)
 	{
 		std::cout << "Error code " << errNo << std::endl;
 	}
-	catch (char* msg)
+	catch (std::runtime_error re)
 	{
-		std::cout << "Error message: " << msg << std::endl;
+		std::cout << re.what() << std::endl;
 	}
 	return 0;
 }

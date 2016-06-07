@@ -1,10 +1,65 @@
 #include "../include/variable.h"
+#include <stdexcept>
 
 static Heap heap;
 
 Value::Value(VARIABLE_TYPE type)
 {
 	this->type = type;
+}
+
+VARIABLE_TYPE Value::GetType()
+{
+	return type;
+}
+
+double Value::GetValue()
+{
+	switch (type)
+	{
+		case INT:
+			return (int)value;
+			break;
+		case DOUBLE:
+			return value;
+			break;
+		case BOOL:
+			return value == 0 ? 0 : 1;
+			break;
+		default:
+			throw std::runtime_error("Unknown variable type");
+	}
+}
+
+VARIABLE_TYPE Variable_Record::GetType()
+{
+	return value->GetType();
+}
+
+double Variable_Record::GetValue()
+{
+	return value->GetValue();
+}
+
+void Variable_Record::SetValue(double new_value)
+{
+	value->SetValue(new_value);
+}
+
+void Value::SetValue(double new_value)
+{
+	switch (type)
+	{
+		case INT:
+			value = (int)new_value;
+			break;
+		case DOUBLE:
+			value = (double)new_value;
+			break;
+		case BOOL:
+			value = new_value == 0 ? 0 : 1;
+			break;
+	}
 }
 
 Value::~Value()

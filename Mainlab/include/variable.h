@@ -5,8 +5,9 @@
 
 enum VARIABLE_TYPE
 {
-	INT = 10010,
+	INT = 10300,
 	DOUBLE,
+	BOOL
 };
 
 class Value
@@ -15,6 +16,10 @@ public:
 	Value(VARIABLE_TYPE type);
 	~Value();
 	VARIABLE_TYPE type;
+	VARIABLE_TYPE GetType();
+	double GetValue();
+	void SetValue(double new_value);
+private:
 	double value;
 };
 class Variable_Record
@@ -22,6 +27,9 @@ class Variable_Record
 public:
 	char* name;
 	Value* value;
+	VARIABLE_TYPE GetType();
+	double GetValue();
+	void SetValue(double new_value);
 	Variable_Record(char* name, Value* value = NULL)
 	{
 		this->name = new char[strlen(name) + 1];

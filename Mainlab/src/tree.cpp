@@ -1,21 +1,55 @@
 #include "../include/tree.h"
 #include "../include/list.h"
 
+Forest::Forest() : TreeList(sizeof(TreeNode*))
+{
+}
+
+Value* Forest::solve()
+{
+	Value* res = NULL;
+	int limit = TreeList.count();
+	for (int i = 0; i < limit; i++)
+	{
+		TreeNode** expr_ptr = (TreeNode**)TreeList.get(i);
+		TreeNode* expr = *expr_ptr;
+		res = expr->solve();
+	}
+	return res;
+}
+
+void Forest::form_forest(List* lexems, int first_index, int last_index)
+{
+	int delim = 0;
+	int limit = last_index;
+	for (delim = 0; delim < last_index; delim++)
+	{
+		Lexem* lex = (Lexem*)lexems->get(delim);
+		if (lex->type == OPERATOR_DELIMITER)
+		{
+			TreeNode* expr = TreeNode::form_expression_tree(lexems, first_index, delim);
+			TreeList.add(&expr);
+			first_index = delim + 1;
+		}
+	}
+}
+
 TreeNode::TreeNode()
 {
-	left_node = right_node = NULL;
+	left_node = right_node = flow_control_specials = NULL;
 	lexem = NULL;
 }
 
 TreeNode* TreeNode::form_expression_tree(List* lexems, int first_index, int last_index)
 {
+	TreeNode* res = new TreeNode();
 	int max_code = -1;
 	int priority_index = -1;
 	// если осталась одна лексема, то просто пишем её в нод - это лист дерева
 	if (last_index - first_index == 1)
 	{
-		this->lexem = (Lexem*)lexems->get(first_index);
-		return this;
+		res->lexem = (Lexem*)lexems->get(first_index);
+		return res;
 	}
 	// убираем окаймляющие скобки - если первая и последняя лексема являются парными скобками,
 	// в качестве выражения берём то, что было внутри скобок,
@@ -45,15 +79,17 @@ TreeNode* TreeNode::form_expression_tree(List* lexems, int first_index, int last
 			priority_index = i;
 		}
 	}
-	lexem = (Lexem*)lexems->get(priority_index);
-	left_node = new TreeNode;
-	left_node->form_expression_tree(lexems, first_index, priority_index);
-	right_node = new TreeNode;
-	right_node->form_expression_tree(lexems, priority_index + 1, last_index);
-	return this;
+	// TODO: добавить обработку для унарных операций
+	// там не будет создаваться right_node, потому что не нужен
+
+	// для бинарных операций - где есть и правый, и левый лепестки
+	res->lexem = (Lexem*)lexems->get(priority_index);
+	res->left_node = TreeNode::form_expression_tree(lexems, first_index, priority_index);
+	res->right_node = TreeNode::form_expression_tree(lexems, priority_index + 1, last_index);
+	return res;
 }
 
-Value* TreeNode::solve(Variable_List* variables)
+Value* TreeNode::solve()
 {
 	Value* lvalue = NULL;
 	Value* rvalue = NULL;
@@ -64,23 +100,23 @@ Value* TreeNode::solve(Variable_List* variables)
 		switch (lexem->code)
 		{
 		case ASSIGNMENT:
-			lvalue = left_node->solve(variables);
-			rvalue = right_node->solve(variables);
+			lvalue = left_node->solve();
+			rvalue = right_node->solve();
 			return solve_assignment(lvalue, rvalue);
 			break;
 		case BINARY_PLUS:
-			lvalue = left_node->solve(variables);
-			rvalue = right_node->solve(variables);
+			lvalue = left_node->solve();
+			rvalue = right_node->solve();
 			return solve_addition(lvalue, rvalue);
 			break;
 		case MULTIPLICATION:
-			lvalue = left_node->solve(variables);
-			rvalue = right_node->solve(variables);
+			lvalue = left_node->solve();
+			rvalue = right_node->solve();
 			return solve_multiplication(lvalue, rvalue);
 			break;
 		case IS_EQUAL:
-			lvalue = left_node->solve(variables);
-			rvalue = right_node->solve(variables);
+			lvalue = left_node->solve();
+			rvalue = right_node->solve();
 			return solve_multiplication(lvalue, rvalue);
 			break;
 		default:
@@ -97,7 +133,7 @@ Value* TreeNode::solve(Variable_List* variables)
 	case NUMERIC_CONST: 
 	{
 		Value* res = new Value(VARIABLE_TYPE::INT);
-		res->value = lexem->const_value;
+		res->SetValue(lexem->const_value);
 		return res;
 	}
 		break;
@@ -111,144 +147,60 @@ Value* TreeNode::solve(Variable_List* variables)
 
 Value* TreeNode::solve_addition(Value* lvalue, Value* rvalue)
 {
-	Value* res = new Value(INT);
-	switch (lvalue->type)
-	{
-		case INT:
-		{
-			res->type = INT;
-			int lnum = (int)lvalue->value;
-			switch (rvalue->type)
-			{
-				case INT:
-				{
-					int rnum = (int)rvalue->value;
-					res->value = lnum + rnum;
-				}
-				break;
-				case DOUBLE:
-				{
-					res->type = DOUBLE;
-					int rnum = (double)rvalue->value;
-					res->value = lnum + rnum;
-				}
-				break;
-				default:
-					throw 12648;
-					break;
-			}
-		}
-		break;
-		case DOUBLE:
-		{
-			res->type = DOUBLE;
-			double lnum = (double)lvalue->value;
-			switch (rvalue->type)
-			{
-				case INT:
-				{
-					int rnum = (int)rvalue->value;
-					res->value = lnum + rnum;
-				}
-				break;
-				case DOUBLE:
-				{
-					int rnum = (double)rvalue->value;
-					res->value = lnum + rnum;
-				}
-				break;
-				default:
-					throw 12648;
-					break;
-			}
-		}
-		break;
-		default:
-			throw 546546351;
-	}
+	Value* res = generate_value(lvalue, rvalue);
+	res->SetValue(lvalue->GetValue() + rvalue->GetValue());
+
+	return res;
+}
+
+Value* TreeNode::solve_subtraction(Value* lvalue, Value* rvalue)
+{
+	Value* res = generate_value(lvalue, rvalue);
+	res->SetValue(lvalue->GetValue() - rvalue->GetValue());
+
 	return res;
 }
 
 Value* TreeNode::solve_assignment(Value* lvalue, Value* rvalue)
 {
-	switch (lvalue->type)
-	{
-	case INT:
-		lvalue->value = (int)rvalue->value;
-		break;
-	case DOUBLE:
-		lvalue->value = (int)rvalue->value;
-		break;
-	default: 
-		throw 18260148;
-		break;
-	}
+	lvalue->SetValue(rvalue->GetValue());
 	return lvalue;
 }
 
 Value* TreeNode::solve_multiplication(Value* lvalue, Value* rvalue)
 {
-	Value* res = new Value(INT);
-	switch (lvalue->type)
-	{
-		case INT:
-		{
-			res->type = INT;
-			int lnum = (int)lvalue->value;
-			switch (rvalue->type)
-			{
-				case INT:
-				{
-					int rnum = (int)rvalue->value;
-					res->value = lnum * rnum;
-				}
-				break;
-				case DOUBLE:
-				{
-					res->type = DOUBLE;
-					int rnum = (double)rvalue->value;
-					res->value = lnum * rnum;
-				}
-				break;
-				default:
-					throw 12648;
-					break;
-			}
-		}
-		break;
-		case DOUBLE:
-		{
-			res->type = DOUBLE;
-			double lnum = (double)lvalue->value;
-			switch (rvalue->type)
-			{
-				case INT:
-				{
-					int rnum = (int)rvalue->value;
-					res->value = lnum * rnum;
-				}
-				break;
-				case DOUBLE:
-				{
-					int rnum = (double)rvalue->value;
-					res->value = lnum * rnum;
-				}
-				break;
-				default:
-					throw 12648;
-					break;
-			}
-		}
-		break;
-		default:
-			throw 546546351;
-	}
+	Value* res = generate_value(lvalue, rvalue);
+	res->SetValue(lvalue->GetValue() * rvalue->GetValue());
+
 	return res;
 }
 
 Value* TreeNode::solve_is_equal(Value* lvalue, Value* rvalue)
 {
-	Value* res = new Value(INT);
-	res->value = (lvalue->value == rvalue->value);
+	Value* res = new Value(BOOL);
+	res->SetValue(lvalue->GetValue() == rvalue->GetValue());
+	return res;
+}
+
+Value* TreeNode::generate_value(Value* lvalue, Value* rvalue)
+{
+	Value* res;
+	if (lvalue->type == DOUBLE || rvalue->type == DOUBLE)
+	{
+		res = new Value(DOUBLE);
+	}
+	else if (lvalue->type == INT || rvalue->type == INT)
+	{
+		res = new Value(INT);
+	}
+	// сюда добавляется CHAR
+	else if (lvalue->GetValue() == BOOL && rvalue->GetValue() == BOOL)
+	{
+		res = new Value(BOOL);
+	}
+	else
+	{
+		throw std::runtime_error(std::string("Кривые ручки программиста не сделали обработку такого типа"));
+	}
 	return res;
 }
