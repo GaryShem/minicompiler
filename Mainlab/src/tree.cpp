@@ -51,11 +51,6 @@ void Forest::form_forest(List* lexems, int first_index, int last_index)
 			delim = first_index - 1;
 		}
 	}
-	if (first_index != last_index)
-	{
-		TreeNode* expr = TreeNode::form_expression_tree(lexems, first_index, last_index);
-		TreeList.add(&expr);
-	}
 }
 
 TreeNode::TreeNode()
@@ -161,10 +156,26 @@ TreeNode* TreeNode::form_expression_tree(List* lexems, int first_index, int last
 						oss << "missing cycle statement braces for FOR operator on line " << lex->line;
 						throw std::runtime_error(oss.str());
 					}
-					Forest* cycle_forest = new Forest;
-					cycle_forest->form_forest(lexems, first_index + 2, cycle_specials->pair_brace_position);
-					res->children_forests.push_back(cycle_forest);
+					int index_delim1 = first_index + 1;
+					Lexem* delim1 = (Lexem*)lexems->get(index_delim1);
+					while (delim1->type != OPERATOR_DELIMITER)
+					{
+						index_delim1++;
+						delim1 = (Lexem*)lexems->get(index_delim1);
+					}
 
+					int index_delim2 = index_delim1 + 1;
+					Lexem* delim2 = (Lexem*)lexems->get(index_delim2);
+					while (delim2->type != OPERATOR_DELIMITER)
+					{
+						index_delim2++;
+						delim2 = (Lexem*)lexems->get(index_delim2);
+					}
+
+					res->children_nodes.push_back(TreeNode::form_expression_tree(lexems, first_index + 2, index_delim1));
+					res->children_nodes.push_back(TreeNode::form_expression_tree(lexems, index_delim1 + 1, index_delim2));
+					res->children_nodes.push_back(TreeNode::form_expression_tree(lexems, index_delim2 + 1, cycle_specials->pair_brace_position));
+					
 					int index_operatock_block_start = cycle_specials->pair_brace_position + 1;
 					Lexem* operator_start = (Lexem*)lexems->get(index_operatock_block_start);
 					if (operator_start->type != PARENTHESES || operator_start->code != (int)CURLY_OPEN)
@@ -292,7 +303,7 @@ Value* TreeNode::solve()
 		case IS_EQUAL:
 			lvalue = children_nodes[0]->solve();
 			rvalue = children_nodes[1]->solve();
-			return solve_multiplication(lvalue, rvalue);
+			return solve_is_equal(lvalue, rvalue);
 			break;
 		case LESS_THAN:
 			lvalue = children_nodes[0]->solve();
@@ -357,15 +368,14 @@ Value* TreeNode::solve()
 				break;
 			case FOR:
 			{
-				Forest* cycle_forest = children_forests[0];
-				Forest* operator_block = children_forests[1];
-				TreeNode* initial = *(TreeNode**)cycle_forest->TreeList.get(0);
+				Forest* operator_block = children_forests[0];
+				TreeNode* initial = children_nodes[0];
 				if (initial != NULL)
 				{
 					initial->solve();
 				}
-				TreeNode* condition = *(TreeNode**)cycle_forest->TreeList.get(1);
-				TreeNode* cyclic = *(TreeNode**)cycle_forest->TreeList.get(2);
+				TreeNode* condition = children_nodes[1];
+				TreeNode* cyclic = children_nodes[2];
 				while (condition == NULL || condition->solve()->GetValue())
 				{
 					operator_block->solve();

@@ -2,6 +2,7 @@ int n;
 input(n);
 if (n < 0)
 {
+	int res = 2;
 	output(n);
 }
 else

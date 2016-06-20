@@ -59,7 +59,7 @@ void StaticAnalyzer::form_lexem_list()
 							break;
 						case 2:
 						{
-							lex->type = LexemType::NUMERIC_CONST;
+							lex->type = LexemType::NUMERIC_CONST; //1.38e-3 015 0x15
 							lex->const_value = 0;
 							for (int zzz = lex->starting_position; zzz < lex->last_position; zzz++)
 							{
@@ -139,7 +139,7 @@ void StaticAnalyzer::print_lexem_list()
 			std::cout << "Parentheses";
 			break;
 		case LexemType::VARIABLE_NAME:
-			std::cout << "Variable";
+			std::cout << "Variable " << lex->word_string;
 			break;
 		case LexemType::OPERATION:
 			std::cout << "Operation";
@@ -147,6 +147,10 @@ void StaticAnalyzer::print_lexem_list()
 		case LexemType::OPERATOR_DELIMITER:
 			std::cout << "Delimiter (;)";
 			break;
+		case FUNCTION: 
+			std::cout << "Function";
+			break;
+		default: break;
 		}
 		std::cout << std::endl;
 	}
@@ -233,7 +237,9 @@ int StaticAnalyzer::check_variables_existence(Variable_List* current_variable_li
 		{
 			if (i == 0 || ((Lexem*)_lexems.get(i - 1))->type != LexemType::VARIABLE_DECLARATION)
 			{
-				std::cout << "Use of undeclared identifier in lexem " << i << " on line " << lexem->line << std::endl;
+				std::ostringstream oss;
+				oss << "Use of undeclared identifier in lexem " << i << " on line " << lexem->line;
+				throw std::runtime_error(oss.str());
 			}
 			// объ€вл€ем переменную, убираем весь кусок из списка лексем
 			else
@@ -252,7 +258,7 @@ int StaticAnalyzer::check_variables_existence(Variable_List* current_variable_li
 			}
 		}
 		// если переменна€ объ€вл€етс€ второй раз
-		else if (variable != NULL && ((Lexem*)_lexems.get(i - 1))->type == LexemType::KEYWORD)
+		else if (variable != NULL && ((Lexem*)_lexems.get(i - 1))->type == LexemType::VARIABLE_DECLARATION)
 		{
 			std::ostringstream oss;
 			oss << "Second declaration of variable " << variable->name << " in lexem " << i << " on line " << lexem->line  << " (variable name: " << lexem->word_string << ")" << std::endl;
@@ -336,9 +342,64 @@ int StaticAnalyzer::check_syntax(int lexem_index)
 				}
 			}
 				break;
-			case FLOW_CONTROL: break;
-			case VARIABLE_NAME: break;
-			case NUMERIC_CONST: break;
+			case FLOW_CONTROL:
+			{
+				if (i == 0)
+				{
+					break;
+				}
+				Lexem* previous_lexem = (Lexem*)_lexems.get(i - 1);
+				if (previous_lexem->type != OPERATOR_DELIMITER && (previous_lexem->type != PARENTHESES || (previous_lexem->code != CURLY_OPEN && previous_lexem->code != CURLY_CLOSE)))
+				{
+					std::ostringstream oss;
+					oss << "missing semicolon/brace before flow control keyword";
+					throw std::runtime_error(oss.str());
+				}
+			}
+				break;
+			case VARIABLE_NAME: 
+			case NUMERIC_CONST: 
+			{
+				int surroundings = 0;
+				if (i == 0)
+				{
+					surroundings++;
+				}
+				else
+				{
+					Lexem* previous_lexem = (Lexem*)_lexems.get(i - 1);
+					if (previous_lexem->type == PARENTHESES || previous_lexem->type == OPERATION || previous_lexem->type == OPERATOR_DELIMITER)
+					{
+						surroundings++;
+					}
+				}
+				if (i == _lexems.count()-1)
+				{
+//					surroundings += 2;
+				}
+				else
+				{
+					Lexem* next_lexem = (Lexem*)_lexems.get(i + 1);
+					if (next_lexem->type == PARENTHESES || next_lexem->type == OPERATION || next_lexem->type == OPERATOR_DELIMITER)
+					{
+						surroundings += 2;
+					}
+				}
+				switch(surroundings)
+				{
+					
+					case 3:
+						break;
+					default:
+					{
+						std::ostringstream oss;
+						oss << "invalid formatting, are you missing a semicolon near line " << lex->line << " ?";
+						throw std::runtime_error(oss.str());
+					}
+						break;
+				}
+			}
+				break;
 			case OPERATION: 
 			{
 				switch (lex->op_type)
@@ -368,6 +429,17 @@ int StaticAnalyzer::check_syntax(int lexem_index)
 				break;
 			case FUNCTION:
 			{
+				if (i == 0)
+				{
+					break;
+				}
+				Lexem* previous_lexem = (Lexem*)_lexems.get(i - 1);
+				if (previous_lexem->type != OPERATOR_DELIMITER && (previous_lexem->type != PARENTHESES || (previous_lexem->code != CURLY_OPEN && previous_lexem->code != CURLY_CLOSE)))
+				{
+					std::ostringstream oss;
+					oss << "missing semicolon/brace before function call";
+					throw std::runtime_error(oss.str());
+				}
 				if (lex->code == INPUT)
 				{
 					Lexem* opening_brace = (Lexem*)_lexems.get(i + 1);
