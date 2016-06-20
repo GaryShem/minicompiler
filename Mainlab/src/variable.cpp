@@ -66,7 +66,7 @@ Value::~Value()
 {
 }
 
-Variable_List::Variable_List(Variable_List* parent_list, int list_number) : List(sizeof(Variable_Record)), _children_list(sizeof(Variable_List))
+Variable_List::Variable_List(Variable_List* parent_list, int list_number) : List(sizeof(Variable_Record)), _children_list(sizeof(Variable_List*))
 {
 	_parent_list = parent_list;
 	_list_number = list_number;

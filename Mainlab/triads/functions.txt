@@ -1,0 +1,13 @@
+1234567890_qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJLKZXCVBNM
+
+0 i 1
+0 o 5
+1 n 2
+2 p 3
+3 u 4
+4 t 11000
+5 u 6
+6 t 7
+7 p 8
+8 u 9
+9 t 11001

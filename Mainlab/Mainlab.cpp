@@ -25,11 +25,12 @@ int _tmain(int argc, _TCHAR* argv[])
 		sa.check_variables_existence();
 		sa.check_parentheses();
 		sa.print_lexem_list();
+		sa.check_syntax();
 		sa.print_variables();
+		sa.print_lexem_list();
 
 		Forest f;
 		f.form_forest(&sa._lexems, 0, sa._lexems.count());
-		sa.print_variables();
 		f.solve();
 		sa.print_variables();
 	}

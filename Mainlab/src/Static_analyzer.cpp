@@ -11,12 +11,13 @@ static Heap heap;
 void StaticAnalyzer::form_lexem_list()
 {
 	automaton automatons[]{
-		automaton("triads/keywords.txt"),
-		automaton("triads/numeric_constants.txt", '?'),
-		automaton("triads/braces.txt", '?', false),
-		automaton("triads/variable_names.txt", '?'),
-		automaton("triads/operations.txt"),
-		automaton("triads/operation_delimiter.txt")
+		automaton("triads/keywords.txt"), //0
+		automaton("triads/functions.txt"), //1
+		automaton("triads/numeric_constants.txt", '?'), //2
+		automaton("triads/braces.txt", '?', false), //3
+		automaton("triads/variable_names.txt", '?'), //4
+		automaton("triads/operations.txt"), //5
+		automaton("triads/operation_delimiter.txt"), //6
 	};
 
 
@@ -31,7 +32,7 @@ void StaticAnalyzer::form_lexem_list()
 		int index = 0;
 		while (program_line[index] != 0)
 		{
-			for (int i = 0; i < 6; i++)
+			for (int i = 0; i < 7; i++)
 			{
 				lex = automatons[i].check(program_line, index);
 				if (lex != NULL)
@@ -40,7 +41,7 @@ void StaticAnalyzer::form_lexem_list()
 					switch (i)
 					{
 						case 0:
-							if (lex->code >= 11000)
+							if (lex->code >= 30000)
 							{
 								lex->type = LexemType::FLOW_CONTROL;
 							}
@@ -54,6 +55,9 @@ void StaticAnalyzer::form_lexem_list()
 							}
 							break;
 						case 1:
+							lex->type = FUNCTION;
+							break;
+						case 2:
 						{
 							lex->type = LexemType::NUMERIC_CONST;
 							lex->const_value = 0;
@@ -64,10 +68,10 @@ void StaticAnalyzer::form_lexem_list()
 							}
 						}
 						break;
-						case 2:
+						case 3:
 							lex->type = LexemType::PARENTHESES;
 							break;
-						case 3:
+						case 4:
 						{
 							lex->type = LexemType::VARIABLE_NAME;
 							int name_length = lex->last_position - lex->starting_position;
@@ -76,7 +80,7 @@ void StaticAnalyzer::form_lexem_list()
 							lex->word_string[name_length] = 0;
 						}
 						break;
-						case 4:
+						case 5:
 							lex->type = LexemType::OPERATION;
 							if (lex->code >= 20000)
 							{
@@ -84,14 +88,16 @@ void StaticAnalyzer::form_lexem_list()
 							}
 							else if (lex->code >= 19000)
 							{
-								lex->code = UNARY;
+								// унарная операция, про которую нельзя сразу сказать, постфиксная она или префиксная - например ++
+								// потом уточняется (в check_syntax в этом же классе)
+								lex->op_type = UNARY;
 							}
 							else 
 							{
-								lex->code = BINARY;
+								lex->op_type = BINARY;
 							}
 						break;
-					case 5:
+					case 6:
 						lex->type = LexemType::OPERATOR_DELIMITER;
 						break;
 					default:
@@ -183,7 +189,6 @@ int StaticAnalyzer::check_parentheses()
 
 int StaticAnalyzer::check_variables_existence(Variable_List* current_variable_list, int starting_index, int deleted_lexems)
 {
-	int limit = _lexems.count();
 	int list_number;
 	if (current_variable_list == NULL)
 	{
@@ -192,7 +197,7 @@ int StaticAnalyzer::check_variables_existence(Variable_List* current_variable_li
 
 	}
 	list_number = current_variable_list->_list_number + 1;
-	for (int i = starting_index; i < limit; i++)
+	for (int i = starting_index; i < _lexems.count(); i++)
 	{
 		Lexem* lexem = (Lexem*)_lexems.get(i);
 		if (lexem->type != LexemType::VARIABLE_NAME && lexem->type != LexemType::PARENTHESES)
@@ -208,7 +213,7 @@ int StaticAnalyzer::check_variables_existence(Variable_List* current_variable_li
 			{
 				list_number++;
 				Variable_List* new_variable_list = new Variable_List(current_variable_list, list_number);
-				current_variable_list->_children_list.add(new_variable_list);
+				current_variable_list->_children_list.add(&new_variable_list);
 				check_variables_existence(new_variable_list, i+1, deleted_lexems);
 				i = lexem->pair_brace_position - deleted_lexems;
 			}
@@ -226,7 +231,7 @@ int StaticAnalyzer::check_variables_existence(Variable_List* current_variable_li
 		// если переменная не объявлена
 		if (variable == NULL)
 		{
-			if (i == 0 || ((Lexem*)_lexems.get(i - 1))->type != LexemType::KEYWORD)
+			if (i == 0 || ((Lexem*)_lexems.get(i - 1))->type != LexemType::VARIABLE_DECLARATION)
 			{
 				std::cout << "Use of undeclared identifier in lexem " << i << " on line " << lexem->line << std::endl;
 			}
@@ -277,7 +282,7 @@ int StaticAnalyzer::check_flow()
 				std::cout << "double " << (double)var->GetValue() << std::endl;
 				break;
 			default:
-				std::cout << "UNKNOWN! ACHTUNG!" << std::endl;
+				std::cout << "UNKNOWN! ACHTUNG! (check_flow)" << std::endl;
 				break;
 		}
 	}
@@ -289,8 +294,6 @@ int StaticAnalyzer::check_syntax(int lexem_index)
 	int limit = _lexems.count();
 	for (int i = lexem_index; i < limit; i++)
 	{
-		try
-		{
 			Lexem* lex = (Lexem*)_lexems.get(i);
 			switch (lex->type)
 			{
@@ -342,148 +345,285 @@ int StaticAnalyzer::check_syntax(int lexem_index)
 				{
 				case UNARY:
 				{
-
+					check_unary_op(i);
 				}
 					break;
 				case BINARY:
 				{
-					// проверяем предыдущую лексему
-					// перед бинарной операцией могут лежать: константа, переменная, закрывающаяся круглая или квадратная скобка
-					if (i == 0)
-					{
-						std::ostringstream oss;
-						oss << "Missing left operand on line " << lex->line << std::endl;
-						throw std::runtime_error(oss.str());
-					}
-					else
-					{
-						Lexem* previous_lex = (Lexem*)_lexems.get(i - 1);
-						if (previous_lex->type != NUMERIC_CONST && previous_lex->type != VARIABLE_NAME && previous_lex->type != PARENTHESES)
-						{
-							std::ostringstream oss;
-							oss << "Missing left operand on line " << lex->line << std::endl;
-							throw std::runtime_error(oss.str());
-						}
-						if (previous_lex->type == PARENTHESES && (previous_lex->code != SQUARE_CLOSE && previous_lex->code != NORMAL_CLOSE))
-						{
-							std::ostringstream oss;
-							oss << "Missing left operand on line " << lex->line << std::endl;
-							throw std::runtime_error(oss.str());
-						}
-					}
-					// теперь смотрим справа от оператора
-					Lexem* next_lexem = (Lexem*)_lexems.get(i + 1);
-					if (next_lexem->type != NUMERIC_CONST && next_lexem->type != VARIABLE_NAME && next_lexem->type != PARENTHESES)
-					{
-						std::ostringstream oss;
-						oss << "Missing left operand on line " << lex->line << std::endl;
-						throw std::runtime_error(oss.str());
-					}
-					if (next_lexem->type == PARENTHESES && next_lexem->code != NORMAL_OPEN)
-					{
-						std::ostringstream oss;
-						oss << "Missing left operand on line " << lex->line << std::endl;
-						throw std::runtime_error(oss.str());
-					}
+					check_binary_op(i);
 				}
 					break;
 				case UNARY_OR_BINARY: 
 				{
-					Lexem* previous_lex;
-					Lexem* next_lex = (Lexem*)_lexems.get(i + 1);
-					if (i == 0)
+					check_unknown_op(i);
+					if (lex->op_type == UNARY)
 					{
-						if (next_lex->type != VARIABLE_NAME && next_lex->type != NUMERIC_CONST && next_lex->type != PARENTHESES )
-						{
-							std::ostringstream oss;
-							oss << "Missing right unary operand on line " << lex->line << std::endl;
-							throw std::runtime_error(oss.str());
-						}
-						if (next_lex->type == PARENTHESES && next_lex->code != NORMAL_OPEN)
-						{
-							std::ostringstream oss;
-							oss << "Missing right unary operand on line " << lex->line << std::endl;
-							throw std::runtime_error(oss.str());
-						}
-						lex->op_type = UNARY;
-						lex->code -= 5000;
+						check_unary_op(i);
 					}
-					else
-					{
-						previous_lex = (Lexem*)_lexems.get(i - 1);
-						// если слева точка с запятой, то это всяко унарный оператор, и справа должен быть операнд
-						if (previous_lex->type == OPERATOR_DELIMITER && (next_lex->type == VARIABLE_NAME || next_lex->type == NUMERIC_CONST || (next_lex->type == PARENTHESES && next_lex->code == NORMAL_OPEN)))
-						{
-							lex->op_type = UNARY;
-							lex->code -= 5000;
-							break;
-						}
-						// если слева и справа переменные или константы, то бинарная операция
-						if ((previous_lex->type == NUMERIC_CONST || previous_lex->type == VARIABLE_NAME) && (next_lex->type == NUMERIC_CONST || next_lex->type == VARIABLE_NAME))
-						{
-							lex->op_type = BINARY;
-							lex->code -= 10000;
-							break;
-						}
-						// если справа закрывающаяся скобка, то всё плохо
-						if (next_lex->type == PARENTHESES && next_lex->code != NORMAL_OPEN)
-						{
-							std::ostringstream oss;
-							oss << "Missing right operand on line " << lex->line << std::endl;
-							throw std::runtime_error(oss.str());
-						}
-						// если слева скобка
-						if (previous_lex->type == PARENTHESES)
-						{
-							// если она открывающаяся - оператор унарный
-							if (previous_lex->code == NORMAL_OPEN)
-							{
-								lex->op_type = UNARY;
-								lex->code -= 5000;
-								break;
-							}
-							// если закрывающаяся - бинарный
-							else if (previous_lex->code == NORMAL_CLOSE)
-							{
-								lex->op_type = BINARY;
-								lex->code -= 10000;
-								break;
-							}
-							// а иначе всё тлен
-							else
-							{
-								std::ostringstream oss;
-								oss << "Missing left operand on line " << lex->line << std::endl;
-								throw std::runtime_error(oss.str());
-							}
-						}
-					}
-					previous_lex = (Lexem*)_lexems.get(i - 1);
 				}
 				break;
 				default: break;
 				}
 			}
 				break;
+			case FUNCTION:
+			{
+				if (lex->code == INPUT)
+				{
+					Lexem* opening_brace = (Lexem*)_lexems.get(i + 1);
+					Lexem* input_variable = (Lexem*)_lexems.get(i + 2);
+					if (opening_brace->type != PARENTHESES || opening_brace->code != NORMAL_OPEN || opening_brace->pair_brace_position - (i+1) != 2 || input_variable->type != VARIABLE_NAME)
+					{
+						std::ostringstream oss;
+						oss << "function format error on line " << lex->line;
+						throw std::runtime_error(oss.str());
+					}
+				}
+				else if (lex->code == OUTPUT)
+				{
+					Lexem* opening_brace = (Lexem*)_lexems.get(i + 1);
+					if (opening_brace->type != PARENTHESES || opening_brace->code != NORMAL_OPEN)
+					{
+						std::ostringstream oss;
+						oss << "function format error on line " << lex->line;
+						throw std::runtime_error(oss.str());
+					}
+				}
+			}
+			break;
 			case OPERATOR_DELIMITER: break;
 			case PARENTHESES: break;
-			case COMMA: break;
-			default: break;
+			default: 
+			{
+				std::ostringstream oss;
+				oss << "unknown lexem on line " << lex->line;
+				throw std::runtime_error(oss.str());
 			}
-		}
-		catch (std::runtime_error err)
+				break;
+			}
+	}
+}
+
+void StaticAnalyzer::check_unary_op(int index)
+{
+	Lexem* lex = (Lexem*)_lexems.get(index);
+	Lexem* previous_lex;
+	Lexem* next_lex;
+		if (_lexems.count() == 1)
 		{
-			std::cout << err.what() << std::endl;
+			std::ostringstream oss;
+			oss << "unary operation error - no operands!(check_unary_op, line " << lex->line << ")";
+			throw std::runtime_error(oss.str());
+		}
+	if (index == 0)
+	{
+
+		next_lex = (Lexem*)_lexems.get(index + 1);
+		if (next_lex->type == VARIABLE_NAME || next_lex->type == NUMERIC_CONST ||
+			(next_lex->type == PARENTHESES && next_lex->code == NORMAL_CLOSE))
+		{
+			lex->op_type = UNARY_PREFIX;
+			lex->code = lex->code - 9000 + 1;
+			return;
+		}
+		else
+		{
+			std::ostringstream oss;
+			oss << "unary operation error - no operands!(check_unary_op, line " << lex->line << ")";
+			throw std::runtime_error(oss.str());
+		}
+	}
+	if (index == _lexems.count()-1)
+	{
+		previous_lex = (Lexem*)_lexems.get(index - 1);
+		if (previous_lex->type == VARIABLE_NAME || previous_lex->type == NUMERIC_CONST || 
+			(previous_lex->type == PARENTHESES && previous_lex->code == NORMAL_CLOSE))
+		{
+			lex->op_type = UNARY_POSTFIX;
+			lex->code = lex->code - 9000;
+			return;
+		}
+		else
+		{
+			std::ostringstream oss;
+			oss << "unary operation error - no operands!(check_unary_op, line " << lex->line << ")";
+			throw std::runtime_error(oss.str());
+		}
+	}
+	next_lex = (Lexem*)_lexems.get(index + 1);
+	previous_lex = (Lexem*)_lexems.get(index - 1);
+	int surroundings = 0;
+	if (previous_lex->type == VARIABLE_NAME || previous_lex->type == NUMERIC_CONST ||
+		(previous_lex->type == PARENTHESES && previous_lex->code == NORMAL_CLOSE))
+	{
+		surroundings++;
+	}
+	if (next_lex->type == VARIABLE_NAME || next_lex->type == NUMERIC_CONST ||
+		(next_lex->type == PARENTHESES && next_lex->code == NORMAL_OPEN))
+	{
+		surroundings += 2;
+	}
+	switch (surroundings)
+	{
+		case 0: 
+		{
+			std::ostringstream oss;
+			oss << "unary operation error - no operands!(check_unary_op, line " << lex->line << ")";
+			throw std::runtime_error(oss.str());
+		}
+			break;
+		case 1:
+			lex->op_type = UNARY_POSTFIX;
+			lex->code = lex->code - 9000;
+			break;
+		case 2:
+			lex->op_type = UNARY_PREFIX;
+			lex->code = lex->code - 9000 + 1;
+			break;
+		case 3:
+		{
+			std::ostringstream oss;
+			oss << "unary operation error - two operands!(check_unary_op, line " << lex->line << ")";
+			throw std::runtime_error(oss.str());
+		}
+			break;
+	}
+}
+
+void StaticAnalyzer::check_binary_op(int index)
+{
+	Lexem* lex = (Lexem*)_lexems.get(index);
+	// проверяем предыдущую лексему
+	// перед бинарной операцией могут лежать: константа, переменная, закрывающаяся круглая
+	// за ней - то же самое, но круглая открывающаяся
+	if (index == 0 || index == _lexems.count() - 1)
+	{
+		std::ostringstream oss;
+		oss << "Missing left operand on line " << lex->line << std::endl;
+		throw std::runtime_error(oss.str());
+	}
+	Lexem* next_lex = (Lexem*)_lexems.get(index + 1);
+	Lexem* previous_lex = (Lexem*)_lexems.get(index - 1);
+	int surroundings = 0;
+	if (previous_lex->type == VARIABLE_NAME || previous_lex->type == NUMERIC_CONST ||
+		(previous_lex->type == PARENTHESES && previous_lex->code == NORMAL_CLOSE))
+	{
+		surroundings++;
+	}
+	if (next_lex->type == VARIABLE_NAME || next_lex->type == NUMERIC_CONST ||
+		(next_lex->type == PARENTHESES && next_lex->code == NORMAL_OPEN))
+	{
+		surroundings += 2;
+	}
+	switch (surroundings)
+	{
+		case 3:
+			break;
+		default:
+		{
+			std::ostringstream oss;
+			oss << "unary operation error - no operands!(check_unary_op, line " << lex->line << ")";
+			throw std::runtime_error(oss.str());
+		}
+		break;
+	}
+}
+
+void StaticAnalyzer::check_unknown_op(int index)
+{
+	Lexem* lex = (Lexem*)_lexems.get(index);
+	Lexem* previous_lex;
+	Lexem* next_lex;
+	if (_lexems.count() < 2)
+	{
+		std::ostringstream oss;
+		oss << "not enough lexems to perform operation!" << std::endl;
+		throw std::runtime_error(oss.str());
+	}
+	if (index == 0)
+	{
+		next_lex = (Lexem*)_lexems.get(index + 1);
+		if (next_lex->type == VARIABLE_NAME || next_lex->type == NUMERIC_CONST ||
+			(next_lex->type == PARENTHESES && next_lex->code == NORMAL_OPEN))
+		{
+			lex->op_type = UNARY_PREFIX;
+			lex->code -= 10000;
+			return;
+		}
+		else 
+		{
+			std::ostringstream oss;
+			oss << "Missing right unary operand on line " << lex->line << std::endl;
+			throw std::runtime_error(oss.str());
+		}
+	}
+	else if (index == _lexems.count()-1)
+	{
+		previous_lex = (Lexem*)_lexems.get(index - 1);
+		if (previous_lex->type == VARIABLE_NAME || previous_lex->type == NUMERIC_CONST ||
+			(previous_lex->type == PARENTHESES && previous_lex->code == NORMAL_CLOSE))
+		{
+			lex->op_type = UNARY_POSTFIX;
+			lex->code -= 10001;
+			return;
+		}
+		else
+		{
+			std::ostringstream oss;
+			oss << "Missing right unary operand on line " << lex->line << std::endl;
+			throw std::runtime_error(oss.str());
+		}
+	}
+	else
+	{
+		next_lex = (Lexem*)_lexems.get(index + 1);
+		previous_lex = (Lexem*)_lexems.get(index - 1);
+		int surroundings = 0;
+
+		if (previous_lex->type == VARIABLE_NAME || previous_lex->type == NUMERIC_CONST ||
+			(previous_lex->type == PARENTHESES && previous_lex->code == NORMAL_CLOSE))
+		{
+			surroundings++;
+		}
+
+		if (next_lex->type == VARIABLE_NAME || next_lex->type == NUMERIC_CONST ||
+			(next_lex->type == PARENTHESES && next_lex->code == NORMAL_OPEN))
+		{
+			surroundings += 2;
+		}
+		switch (surroundings)
+		{
+			default:
+			{
+				std::ostringstream oss;
+				oss << "unary operation error - no operands!(check_unary_op, line " << lex->line << ")";
+				throw std::runtime_error(oss.str());
+			}
+			break;
+			case 1:
+				lex->op_type = UNARY_POSTFIX;
+				lex->code -= 10000;
+				break;
+			case 2:
+				lex->op_type = UNARY_PREFIX;
+				lex->code -= 10000;
+				break;
+			case 3:
+				lex->op_type = BINARY;
+				lex->code -= 5000;
+				break;
+			break;
 		}
 	}
 }
 
-void StaticAnalyzer::print_variables(int indent)
+void StaticAnalyzer::print_variables()
 {
-	int limit = _global_variables.count();
+	Variable_List *current_list = &_global_variables;
+	int limit = current_list->count();
 	for (int i = 0; i < limit; i++)
 	{
-		Variable_Record* var = (Variable_Record*)_global_variables.get(i);
+		Variable_Record* var = (Variable_Record*)current_list->get(i);
 		std::cout << var->name << "   ";
 		switch (var->value->type)
 		{
@@ -493,13 +633,64 @@ void StaticAnalyzer::print_variables(int indent)
 		case DOUBLE:
 			std::cout << "double " << (double)var->GetValue()<< std::endl;
 			break;
-		default:
-			std::cout << "UNKNOWN! ACHTUNG!" << std::endl;
+		case BOOL: 
+			std::cout << "bool " << (bool)var->GetValue() << std::endl;
 			break;
+		default:
+		{
+			std::ostringstream oss;
+			oss << "unknown variable type on var named " << var->name;
+			throw std::runtime_error(oss.str());
 		}
+			break;
+
+		}
+	}
+	for (int i = 0; i < current_list->_children_list.count(); i++)
+	{
+		Variable_List *next_list = (*(Variable_List**)current_list->_children_list.get(i));
+		print_variable_list_recursive(next_list, 2);
 		std::cout << std::endl;
 	}
 }
+
+void StaticAnalyzer::print_variable_list_recursive(Variable_List* list, int indent)
+{
+	int limit = list->count();
+	for (int i = 0; i < limit; i++)
+	{
+		Variable_Record* var = (Variable_Record*)list->get(i);
+		std::cout << std::string(indent, ' ');
+		std::cout << var->name << "   ";
+		switch (var->value->type)
+		{
+			case INT:
+				std::cout << "int " << (int)var->GetValue() << std::endl;
+				break;
+			case DOUBLE:
+				std::cout << "double " << (double)var->GetValue() << std::endl;
+				break;
+			case BOOL:
+				std::cout << "bool " << (bool)var->GetValue() << std::endl;
+				break;
+			default:
+			{
+				std::ostringstream oss;
+				oss << "unknown variable type on var named " << var->name;
+				throw std::runtime_error(oss.str());
+			}
+			break;
+
+		}
+	}
+	for (int i = 0; i < list->_children_list.count(); i++)
+	{
+		Variable_List *next_list = (Variable_List*)list->_children_list.get(i);
+		print_variable_list_recursive(next_list, indent+2);
+		std::cout << std::endl;
+	}
+}
+
 
 bool StaticAnalyzer::find_pair_parentheses(int closing_parenthesis_code, int* brace_position)
 {
